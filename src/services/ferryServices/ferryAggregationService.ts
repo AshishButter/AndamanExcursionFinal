@@ -128,6 +128,11 @@ export class FerryAggregationService {
   private static async searchGreenOcean(
     params: FerrySearchParams
   ): Promise<OperatorResult> {
+    // Temporarily disabled / hidden
+    return {
+      operator: "greenocean",
+      results: [],
+    };
     try {
       if (
         !process.env.GREEN_OCEAN_PUBLIC_KEY ||
@@ -366,6 +371,11 @@ export class FerryAggregationService {
     status: "online" | "offline" | "error";
     message?: string;
   }> {
+    // Temporarily disabled / hidden
+    return {
+      status: "offline",
+      message: "Temporarily disabled",
+    };
     try {
       if (
         !process.env.GREEN_OCEAN_PUBLIC_KEY ||
