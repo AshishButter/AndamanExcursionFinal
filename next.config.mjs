@@ -41,6 +41,10 @@ const nextConfig = withPayload({
         protocol: "https",
         hostname: "*.utfs.io",
       },
+      {
+        protocol: "https",
+        hostname: "*.ufs.sh",
+      },
     ],
   },
 
