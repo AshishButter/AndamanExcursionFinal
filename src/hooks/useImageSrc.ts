@@ -297,7 +297,8 @@ function getMainImageUrl(mediaObj: Media, debug: boolean): string {
   if (
     mediaObj.url &&
     typeof mediaObj.url === "string" &&
-    !mediaObj.url.includes("undefined")
+    !mediaObj.url.includes("undefined") &&
+    !mediaObj.url.endsWith("/.")
   ) {
     // if (debug)
     //   console.log("✅ Using direct URL from media object:", mediaObj.url);
