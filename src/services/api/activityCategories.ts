@@ -8,7 +8,7 @@ export const activityCategoryApi = {
   async getAll(): Promise<ActivityCategory[]> {
     try {
       const response = await fetch(
-        `${API_BASE}/api/activity-categories?sort=priority&limit=100`
+        `${API_BASE}/api/activity-categories?sort=sortOrder&limit=100`
       );
       if (!response.ok) throw new Error("Failed to fetch activity categories");
       const data = await response.json();
@@ -23,7 +23,7 @@ export const activityCategoryApi = {
   async getActive(): Promise<ActivityCategory[]> {
     try {
       const response = await fetch(
-        `${API_BASE}/api/activity-categories?where[isActive][equals]=true&sort=priority&limit=100`
+        `${API_BASE}/api/activity-categories?where[isActive][equals]=true&sort=sortOrder&limit=100`
       );
       if (!response.ok)
         throw new Error("Failed to fetch active activity categories");
@@ -57,7 +57,7 @@ export const activityCategoryApi = {
   async getFeatured(): Promise<ActivityCategory[]> {
     try {
       const response = await fetch(
-        `${API_BASE}/api/activity-categories?where[isFeatured][equals]=true&where[isActive][equals]=true&sort=priority&limit=10`
+        `${API_BASE}/api/activity-categories?where[isFeatured][equals]=true&where[isActive][equals]=true&sort=sortOrder&limit=10`
       );
       if (!response.ok) throw new Error("Failed to fetch featured categories");
       const data = await response.json();
