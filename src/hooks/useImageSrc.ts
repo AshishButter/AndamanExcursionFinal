@@ -67,7 +67,7 @@ const extractUploadThingKey = (url: string): string | null => {
     if (utMatch) return utMatch[1];
 
     // Match filename patterns that might contain the key
-    const filenameMatch = url.match(/([a-zA-Z0-9_-]{10,})/);
+    const filenameMatch = url.match(/([a-zA-Z0-9_-]{32,})/);
     if (filenameMatch) return filenameMatch[1];
 
     return null;
