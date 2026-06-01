@@ -151,7 +151,7 @@ export const DynamicCategoryPackagesBlock: React.FC<
               {filteredPackages.map((pkg) => (
                 <FeaturePackageCard
                   key={pkg.id}
-                  title={pkg.title}
+                  title={pkg.slug === "baratang-shores-romanticgetaway" || pkg.title?.toLowerCase().includes("romantic getaway") ? "Romantic Getaway" : pkg.title}
                   description={
                     pkg.descriptions?.shortDescription ||
                     pkg.descriptions?.description
