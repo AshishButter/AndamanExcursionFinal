@@ -64,17 +64,40 @@ export const TrustedFerriesBlock = ({ content }: TrustedFerriesBlockProps) => {
           responsive
           responsiveGap="var(--space-4)"
         >
-          {ferries.map((ferry, index) => (
-            <SmallCard
-              key={index}
-              image={ferry.image}
-              imageAlt={ferry.imageAlt}
-              title={ferry.title}
-              rating={ferry.rating}
-              price={ferry.price}
-              href={ferry.href}
-            />
-          ))}
+          {ferries.map((ferry, index) => {
+            let overrideImage = ferry.image;
+            if (ferry.title.includes("Nautica") || ferry.title.includes("Nautika")) {
+              overrideImage = {
+                ...(ferry.image || {}),
+                url: "/images/ferry/trustedFerries/nautika-cruise-andaman-islands.jpeg",
+                sizes: undefined,
+              } as any;
+            } else if (ferry.title.includes("Makruzz")) {
+              overrideImage = {
+                ...(ferry.image || {}),
+                url: "/images/ferry/trustedFerries/makruzzFerryImage.jpg",
+                sizes: undefined,
+              } as any;
+            } else if (ferry.title.includes("Green Ocean")) {
+              overrideImage = {
+                ...(ferry.image || {}),
+                url: "/images/ferry/trustedFerries/green-ocean-1-ferry-andaman-2025.webp",
+                sizes: undefined,
+              } as any;
+            }
+
+            return (
+              <SmallCard
+                key={index}
+                image={overrideImage}
+                imageAlt={ferry.imageAlt}
+                title={ferry.title}
+                rating={ferry.rating}
+                price={ferry.price}
+                href={ferry.href}
+              />
+            );
+          })}
         </Row>
       </Column>
     </Section>
