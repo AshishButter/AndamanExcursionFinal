@@ -24,13 +24,22 @@ export default async function Activities({ params }: PageProps) {
 
   // Forcefully override the hero image for the activities page
   const blocks = page.pageContent.content.map((block: any) => {
-    if (block.blockType === "hero" || block.blockType === "secondaryBanner") {
+    if (block.blockType === "hero") {
       return {
         ...block,
         image: {
           ...(block.image || {}),
           url: "/images/activities/colorful-hot-air-balloon-sea.jpg",
           sizes: undefined, // Remove sizes to force using the new url
+        },
+      };
+    } else if (block.blockType === "secondaryBanner") {
+      return {
+        ...block,
+        image: {
+          ...(block.image || {}),
+          url: "/images/activities/beach-that-extends-into-sea-looking-out-see-island-blue-sky-there-are-many-boats-floating-emerald-green-sea-andaman-sea.jpg",
+          sizes: undefined,
         },
       };
     }

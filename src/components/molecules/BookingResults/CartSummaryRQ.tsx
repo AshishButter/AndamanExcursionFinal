@@ -259,7 +259,7 @@ export const CartSummaryRQ: React.FC<CartSummaryProps> = ({
           <div className={styles.mobileHeaderContent}>
             <h3 className={styles.mobileTitle}>Your Selection</h3>
             <p className={styles.mobileSubtitle}>
-              {totalGuests} guests • ₹{totalPrice.toLocaleString()}
+              {totalGuests} guests • Total: ₹{totalPrice.toLocaleString()} (Pay ₹{(300 * cart.reduce((sum, item) => sum + item.quantity, 0)).toLocaleString()} now)
             </p>
           </div>
         </div>
@@ -378,6 +378,9 @@ export const CartSummaryRQ: React.FC<CartSummaryProps> = ({
                           </div>
                           <span className={styles.compactPrice}>
                             ₹{item.totalPrice.toLocaleString()}
+                            <div style={{ color: "#e74c3c", fontSize: "10px", fontWeight: "bold", marginTop: "2px" }}>
+                              Advance: ₹{(300 * item.quantity).toLocaleString()}
+                            </div>
                           </span>
                         </div>
                       </div>
@@ -522,8 +525,12 @@ export const CartSummaryRQ: React.FC<CartSummaryProps> = ({
                       }}
                       className={styles.gridPricing}
                     >
-                      <div className={styles.mainPrice}>
-                        ₹{item.totalPrice.toLocaleString()}
+                      <div className={styles.mainPrice} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                        <span>₹{item.totalPrice.toLocaleString()}</span>
+                        <div style={{ color: "#e74c3c", fontSize: "11px", fontWeight: "bold", marginTop: "2px", lineHeight: "1.2" }}>
+                          Advance: ₹{(300 * item.quantity).toLocaleString()}<br />
+                          <span style={{ fontSize: "10px" }}>Rest at venue</span>
+                        </div>
                       </div>
                       <div
                         className={`${styles.editableField} ${styles.guestCountClickable} ${styles.quantityInfo}`}
@@ -668,7 +675,15 @@ export const CartSummaryRQ: React.FC<CartSummaryProps> = ({
         </div>
 
         {/* Action Section */}
-        <div className={styles.actionSection}>
+        <div className={styles.actionSection} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ padding: '10px 15px', backgroundColor: 'rgba(231, 76, 60, 0.1)', border: '1px solid #e74c3c', borderRadius: '8px', marginBottom: '16px', textAlign: 'center', width: '100%' }}>
+            <span style={{ color: '#e74c3c', fontWeight: 'bold', fontSize: '14px' }}>
+              Online Booking Advance: ₹{(300 * cart.reduce((sum, item) => sum + item.quantity, 0)).toLocaleString()}
+            </span>
+            <div style={{ color: '#c0392b', fontSize: '12px', marginTop: '4px' }}>
+              Only pay ₹300 per activity now. Remaining balance to be paid at the activity venue.
+            </div>
+          </div>
           <Button
             className={styles.enhancedNextButton}
             onClick={() => router.push("/checkout?type=activity")}
@@ -681,3 +696,4 @@ export const CartSummaryRQ: React.FC<CartSummaryProps> = ({
     </div>
   );
 };
+

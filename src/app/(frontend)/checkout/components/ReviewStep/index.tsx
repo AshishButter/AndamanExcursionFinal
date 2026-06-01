@@ -219,7 +219,21 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                 </div>
               </div>
               <div className={styles.itemPrice}>
-                ₹{item.price.toLocaleString()}
+                {item.type === "activity" && item.originalPrice ? (
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "0.85em", textDecoration: "line-through", color: "#666" }}>
+                      Total: ₹{item.originalPrice.toLocaleString()}
+                    </div>
+                    <div style={{ color: "#e74c3c", fontWeight: "bold" }}>
+                      Advance: ₹{item.price.toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: "0.75em", color: "#e74c3c", marginTop: "4px" }}>
+                      Rest to be paid at venue
+                    </div>
+                  </div>
+                ) : (
+                  <>₹{item.price.toLocaleString()}</>
+                )}
               </div>
             </div>
           ))}

@@ -38,6 +38,7 @@ export interface UnifiedBookingItem {
     infants: number;
   };
   price: number;
+  originalPrice?: number;
   date: string;
   time?: string;
   location?: string | Location | Location[]; // Keep flexible for backward compatibility
@@ -325,7 +326,8 @@ export class CheckoutAdapter {
           children: 0, // COMMENTED OUT: Children not handled for activities
           infants: 0, // COMMENTED OUT: Infants not handled for activities
         },
-        price: cartItem.totalPrice,
+        price: 300 * cartItem.quantity,
+        originalPrice: cartItem.totalPrice,
         date: cartItem.searchParams.date || "",
         time: cartItem.searchParams.time || "",
         // FIXED: Ensure location is string type for activities
