@@ -41,7 +41,7 @@ export const SecondaryBanner = ({
       <div className={styles.imageContainer}>
         <ImageContainer
           src={
-            content.title?.includes("Activite") || content.title?.includes("Activities")
+            content.title?.includes("Dive") || content.title?.includes("thrill")
               ? {
                   ...content.image,
                   url: "/images/activities/colorful-hot-air-balloon-sea.jpg",
