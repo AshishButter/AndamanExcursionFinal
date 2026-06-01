@@ -60,7 +60,7 @@ export const PackageDetailHeader: React.FC<PackageDetailHeaderProps> = ({
         responsiveGap="var(--space-4)"
       >
         <h1 className={styles.sectionTitle}>
-          {packageData.title?.includes("Romantic Getaway") && packageData.title?.includes("Baratang")
+          {packageData.title?.toLowerCase().includes("romantic getaway")
             ? "Romantic Getaway"
             : packageData.title}
         </h1>
