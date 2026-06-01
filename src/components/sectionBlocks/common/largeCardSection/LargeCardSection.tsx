@@ -10,7 +10,7 @@ export const LargeCardSection = ({ content }: LargeCardSectionProps) => {
   let overrideImage = image;
   if (title && title.includes("Andaman is Calling")) {
     overrideImage = {
-      ...(image || {}),
+      ...((image as any) || {}),
       url: "/images/activities/beach-that-extends-into-sea-looking-out-see-island-blue-sky-there-are-many-boats-floating-emerald-green-sea-andaman-sea.jpg",
       sizes: undefined,
     } as any;

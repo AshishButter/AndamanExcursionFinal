@@ -68,19 +68,19 @@ export const TrustedFerriesBlock = ({ content }: TrustedFerriesBlockProps) => {
             let overrideImage = ferry.image;
             if (ferry.title.includes("Nautica") || ferry.title.includes("Nautika")) {
               overrideImage = {
-                ...(ferry.image || {}),
+                ...((ferry.image as any) || {}),
                 url: "/images/ferry/trustedFerries/nautika-cruise-andaman-islands.jpeg",
                 sizes: undefined,
               } as any;
             } else if (ferry.title.includes("Makruzz")) {
               overrideImage = {
-                ...(ferry.image || {}),
+                ...((ferry.image as any) || {}),
                 url: "/images/ferry/trustedFerries/makruzzFerryImage.jpg",
                 sizes: undefined,
               } as any;
             } else if (ferry.title.includes("Green Ocean")) {
               overrideImage = {
-                ...(ferry.image || {}),
+                ...((ferry.image as any) || {}),
                 url: "/images/ferry/trustedFerries/green-ocean-1-ferry-andaman-2025.webp",
                 sizes: undefined,
               } as any;
