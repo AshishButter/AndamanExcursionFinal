@@ -596,7 +596,11 @@ export const MemberDetailsStep: React.FC<MemberDetailsStepProps> = ({
         {/* Show message when maximum passengers reached */}
         {fields.length >= requirements.totalRequired && (
           <div className={styles.maxPassengersMessage}>
-            <p>Maximum passengers reached ({requirements.totalRequired})</p>
+            <p>
+              {requirements.totalRequired < bookingData.totalPassengers
+                ? `Primary contact details captured (Passenger 1 of ${bookingData.totalPassengers}). No additional details required.`
+                : `Maximum passengers reached (${requirements.totalRequired})`}
+            </p>
           </div>
         )}
 
