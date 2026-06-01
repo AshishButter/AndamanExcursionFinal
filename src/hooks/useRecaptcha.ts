@@ -73,6 +73,13 @@ export function useRecaptcha({ siteKey, containerId }: UseRecaptchaV2Options) {
 
     let cancelled = false;
 
+    // Bypass for local development
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      setIsLoaded(true);
+      setToken("mock-token-local-dev");
+      return () => { cancelled = true; };
+    }
+
     ensureScriptLoaded()
       .then(() => {
         if (cancelled) return;

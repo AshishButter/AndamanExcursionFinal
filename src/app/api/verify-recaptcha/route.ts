@@ -20,6 +20,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Local development bypass
+    if (token === "mock-token-local-dev" && process.env.NODE_ENV !== "production") {
+      return NextResponse.json({
+        success: true,
+        message: "reCAPTCHA verification successful (Local Dev Bypass)",
+      });
+    }
+
     const secretKey = process.env.RECAPTCHA_SECRET_KEY;
     if (!secretKey) {
       return NextResponse.json(
