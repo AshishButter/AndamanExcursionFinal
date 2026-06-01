@@ -50,7 +50,14 @@ export const Banner = ({ className, id = "hero", content }: BannerProps) => {
         )}
         <ImageContainer
           className={styles.heroImage}
-          src={content.image}
+          src={
+            (content.image as any)?.filename?.includes("activities-hero") || (content.image as any)?.url?.includes("activities-hero") || content.title?.includes("Dive") || content.title?.includes("thrill")
+              ? {
+                  ...content.image,
+                  url: "/images/activities/colorful-hot-air-balloon-sea.jpg",
+                }
+              : content.image
+          }
           alt={content.image?.alt || ""}
           aspectRatio="banner"
           priority
