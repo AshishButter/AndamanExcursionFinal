@@ -147,8 +147,27 @@ export class CheckoutAdapter {
     data: UnifiedBookingData
   ): PassengerRequirements {
     let required = data.totalPassengers;
+    
     if (data.type === 'activity') {
       required = 1;
+    } else if (data.type === 'mixed') {
+      // For mixed bookings, we need passenger details for ferry/boat (all passengers)
+      // but only 1 primary contact for activities.
+      let ferryBoatPassengers = 0;
+      let hasActivity = false;
+      
+      data.items.forEach(item => {
+        if (item.type === 'ferry' || item.type === 'boat') {
+          const itemPax = item.passengers.adults + item.passengers.children + item.passengers.infants;
+          if (itemPax > ferryBoatPassengers) {
+            ferryBoatPassengers = itemPax; // Take the max needed for any single transport leg
+          }
+        } else if (item.type === 'activity') {
+          hasActivity = true;
+        }
+      });
+      
+      required = ferryBoatPassengers > 0 ? ferryBoatPassengers : (hasActivity ? 1 : data.totalPassengers);
     }
     
     return {
