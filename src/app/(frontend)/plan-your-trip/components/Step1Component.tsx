@@ -200,6 +200,8 @@ export const Step1Component: React.FC<Step1ComponentProps> = ({ form }) => {
               }
               className={styles.passengerCounter}
               hideInfants
+              adultsLabel={<>Adults <span style={{ fontSize: "0.85em", color: "var(--color-gray-500)", fontWeight: "normal", marginLeft: "4px" }}>(above 1 year)</span></>}
+              childrenLabel={<>Infants <span style={{ fontSize: "0.85em", color: "var(--color-gray-500)", fontWeight: "normal", marginLeft: "4px" }}>(under 1 year old)</span></>}
             />
           </div>
         </div>

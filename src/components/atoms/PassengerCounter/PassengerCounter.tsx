@@ -17,6 +17,9 @@ interface PassengerCounterPropsWithError extends PassengerCounterProps {
   // Add props to hide infants and children for activities
   hideInfants?: boolean;
   hideChildren?: boolean;
+  adultsLabel?: React.ReactNode;
+  childrenLabel?: React.ReactNode;
+  infantsLabel?: React.ReactNode;
 }
 
 export const PassengerCounter = ({
@@ -28,6 +31,9 @@ export const PassengerCounter = ({
   label = "Passengers",
   hideInfants = false, // Default to false to maintain ferry functionality
   hideChildren = false, // Default to false to maintain ferry functionality
+  adultsLabel = "Adults",
+  childrenLabel = "Children/Infants",
+  infantsLabel = "Infants",
 }: PassengerCounterPropsWithError) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -40,7 +46,7 @@ export const PassengerCounter = ({
             className={`${styles.selectWrapper} ${hasError ? styles.error : ""
               }`}
           >
-            <span className={styles.selectLabel}>Adults</span>
+            <span className={styles.selectLabel}>{adultsLabel}</span>
             <div className={styles.counterInner}>
               <button
                 type="button"
@@ -73,7 +79,7 @@ export const PassengerCounter = ({
                 }`}
             >
               <span className={clsx(styles.selectLabel, styles.kidSelectLabel)}>
-                Children/Infants
+                {childrenLabel}
               </span>
               <div className={styles.counterInner}>
                 <button
@@ -108,7 +114,7 @@ export const PassengerCounter = ({
                 }`}
             >
               <span className={clsx(styles.selectLabel, styles.kidSelectLabel)}>
-                Infants
+                {infantsLabel}
                 <div
                   className={styles.tooltipContainer}
                   onMouseEnter={() => setShowTooltip(true)}

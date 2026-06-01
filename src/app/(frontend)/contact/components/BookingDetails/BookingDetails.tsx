@@ -266,7 +266,9 @@ export const BookingDetails: React.FC<BookingDetailsProps> = ({
 
           {/* Adults Counter */}
           <div className={cn(styles.gridItem, styles.counter)}>
-            <label className={styles.label}>Adults</label>
+            <label className={styles.label}>
+              Adults <span style={{ fontSize: "0.85em", color: "var(--color-gray-500)", fontWeight: "normal", marginLeft: "4px" }}>(above 1 year)</span>
+            </label>
             <div className={styles.passengerCounter}>
               <div className={styles.passengerControls}>
                 <button
@@ -307,7 +309,9 @@ export const BookingDetails: React.FC<BookingDetailsProps> = ({
 
           {/* Children Counter */}
           <div className={cn(styles.gridItem, styles.counter)}>
-            <label className={styles.label}>Infants</label>
+            <label className={styles.label}>
+              Infants <span style={{ fontSize: "0.85em", color: "var(--color-gray-500)", fontWeight: "normal", marginLeft: "4px" }}>(under 1 year old)</span>
+            </label>
             <div className={styles.passengerCounter}>
               <div className={styles.passengerControls}>
                 <button
