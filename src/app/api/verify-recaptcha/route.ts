@@ -20,12 +20,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Local development bypass
-    if (token === "mock-token-local-dev" && process.env.NODE_ENV !== "production") {
-      return NextResponse.json({
-        success: true,
-        message: "reCAPTCHA verification successful (Local Dev Bypass)",
-      });
+    // Local development and Vercel preview bypass
+    if (token === "mock-token-local-dev") {
+      // Vercel sets VERCEL_ENV to "preview" or "development" for non-production builds
+      const isProduction = process.env.NODE_ENV === "production" && process.env.VERCEL_ENV === "production";
+      if (!isProduction) {
+        return NextResponse.json({
+          success: true,
+          message: "reCAPTCHA verification successful (Preview Bypass)",
+        });
+      }
     }
 
     const secretKey = process.env.RECAPTCHA_SECRET_KEY;

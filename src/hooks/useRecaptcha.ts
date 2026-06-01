@@ -73,8 +73,12 @@ export function useRecaptcha({ siteKey, containerId }: UseRecaptchaV2Options) {
 
     let cancelled = false;
 
-    // Bypass for local development
-    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    // Bypass for local development and Vercel previews
+    if (
+      window.location.hostname === "localhost" || 
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname.endsWith(".vercel.app")
+    ) {
       setIsLoaded(true);
       setToken("mock-token-local-dev");
       return () => { cancelled = true; };
