@@ -30,6 +30,7 @@ export default async function Activities({ params }: PageProps) {
         image: {
           ...(block.image || {}),
           url: "/images/activities/colorful-hot-air-balloon-sea.jpg",
+          sizes: undefined, // Remove sizes to force using the new url
         },
       };
     }
