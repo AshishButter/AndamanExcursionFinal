@@ -22,7 +22,21 @@ export default async function Activities({ params }: PageProps) {
     notFound();
   }
 
-  return <BlockRenderer blocks={page.pageContent.content} />;
+  // Forcefully override the hero image for the activities page
+  const blocks = page.pageContent.content.map((block: any) => {
+    if (block.blockType === "hero" || block.blockType === "secondaryBanner") {
+      return {
+        ...block,
+        image: {
+          ...(block.image || {}),
+          url: "/images/activities/colorful-hot-air-balloon-sea.jpg",
+        },
+      };
+    }
+    return block;
+  });
+
+  return <BlockRenderer blocks={blocks} />;
 }
 
 export async function generateMetadata(): Promise<Metadata> {
