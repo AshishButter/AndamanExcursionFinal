@@ -33,10 +33,25 @@ export const TopActivityCategories = ({
           ariaLabel="Available water activities"
         >
           {content.activityCategories.map((activity) => {
+            let overrideImage = activity.image as Media;
+            if (activity.name?.includes("Sea Walking")) {
+              overrideImage = {
+                ...(activity.image as any || {}),
+                url: "/images/ferry/seaWalking/bora-bora-aqua-safari.jpg.webp",
+                sizes: undefined,
+              } as Media;
+            } else if (activity.name?.includes("Parasailing")) {
+              overrideImage = {
+                ...(activity.image as any || {}),
+                url: "/images/ferry/seaWalking/boat-dragging-couples-with-clourfull-parachute.jpg",
+                sizes: undefined,
+              } as Media;
+            }
+
             return (
               <SmallCard
                 key={activity.slug}
-                image={activity.image as Media}
+                image={overrideImage}
                 title={activity.name}
                 description={activity.description}
                 href={`/activities/search?activityType=${activity.slug}`}
