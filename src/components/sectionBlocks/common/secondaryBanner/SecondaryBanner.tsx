@@ -40,7 +40,14 @@ export const SecondaryBanner = ({
 
       <div className={styles.imageContainer}>
         <ImageContainer
-          src={content.image}
+          src={
+            content.title?.includes("Activite") || content.title?.includes("Activities")
+              ? {
+                  ...content.image,
+                  url: "/images/activities/colorful-hot-air-balloon-sea.jpg",
+                }
+              : content.image
+          }
           alt={content.image.alt}
           aspectRatio="banner"
           className={styles.image}
