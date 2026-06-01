@@ -146,8 +146,13 @@ export class CheckoutAdapter {
   static getPassengerRequirements(
     data: UnifiedBookingData
   ): PassengerRequirements {
+    let required = data.totalPassengers;
+    if (data.type === 'activity') {
+      required = 1;
+    }
+    
     return {
-      totalRequired: data.totalPassengers,
+      totalRequired: required,
       bookings: data.items.map((item) => ({
         title: item.title,
         passengers:
@@ -183,7 +188,8 @@ export class CheckoutAdapter {
             basePrice = item.ferry?.selectedClass?.price || (item.price / bookingData.totalPassengers);
             break;
           case 'activity':
-            basePrice = item.price / bookingData.totalPassengers;
+            // Activities only collect 1 primary contact, so skip recalculation based on members list
+            basePrice = 0;
             break;
           case 'boat':
             basePrice = item.price / bookingData.totalPassengers;
