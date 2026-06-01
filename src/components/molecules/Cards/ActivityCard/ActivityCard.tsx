@@ -359,9 +359,9 @@ const ActivityCard: React.FC<ActivityCardProps> = ({
                   /total
                 </span>
               </div>
-              <div style={{ color: "#e74c3c", fontSize: "11px", fontWeight: "bold", marginTop: "6px", textAlign: "right", lineHeight: "1.2" }}>
-                Pay ₹300 advance online<br/>
-                <span style={{ fontSize: "10px", fontWeight: "normal" }}>Rest at venue</span>
+              <div style={{ color: "#e74c3c", fontSize: "13px", fontWeight: "bold", marginTop: "6px", textAlign: "right", lineHeight: "1.3" }}>
+                Pay only ₹300 advance online<br/>
+                <span style={{ fontSize: "12px", fontWeight: "600", color: "#c0392b" }}>Rest to be paid at venue</span>
               </div>
             </div>
           </div>

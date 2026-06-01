@@ -525,12 +525,11 @@ export const CartSummaryRQ: React.FC<CartSummaryProps> = ({
                       }}
                       className={styles.gridPricing}
                     >
-                      <div className={styles.mainPrice} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <div className={styles.mainPrice}>
                         <span>₹{item.totalPrice.toLocaleString()}</span>
-                        <div style={{ color: "#e74c3c", fontSize: "11px", fontWeight: "bold", marginTop: "2px", lineHeight: "1.2" }}>
-                          Advance: ₹{(300 * item.quantity).toLocaleString()}<br />
-                          <span style={{ fontSize: "10px" }}>Rest at venue</span>
-                        </div>
+                      </div>
+                      <div style={{ color: "#e74c3c", fontSize: "11px", fontWeight: "bold", lineHeight: "1.2" }}>
+                        Advance: ₹{(300 * item.quantity).toLocaleString()} | Rest at venue
                       </div>
                       <div
                         className={`${styles.editableField} ${styles.guestCountClickable} ${styles.quantityInfo}`}
