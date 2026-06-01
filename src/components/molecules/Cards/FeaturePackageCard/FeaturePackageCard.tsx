@@ -121,7 +121,11 @@ export const FeaturePackageCard: React.FC<FeaturePackageCardProps> = ({
           {/* Top Section: Title, Location & Duration Badge */}
           <div className={styles.topSection}>
             <div className={styles.titleGroup}>
-              <h3 className={styles.title}>{title}</h3>
+              <h3 className={styles.title}>
+                {title?.toLowerCase().includes("romantic getaway")
+                  ? "Romantic Getaway"
+                  : title}
+              </h3>
 
               {/* Location with Icon */}
               {formattedLocations && (

@@ -128,7 +128,11 @@ export const PackageCard = ({
   const CardContent = ({ isWrappedInLink = false }) => (
     <div className={styles.contentContainer}>
       <div className={styles.headerContainer}>
-        <h2 className={styles.title}>{title}</h2>
+        <h2 className={styles.title}>
+          {title?.toLowerCase().includes("romantic getaway")
+            ? "Romantic Getaway"
+            : title}
+        </h2>
         {href && !isWrappedInLink && (
           <div className={styles.viewDetailsContainer}>
             <InlineLink
