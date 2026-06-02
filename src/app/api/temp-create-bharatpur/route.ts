@@ -107,7 +107,7 @@ export async function GET() {
                         },
                         {
                             title: "Arrival at the Beach",
-                            description": "The beach is easily accessible from the main road, making it very convenient for visitors of all ages to reach and enjoy.",
+                            description: "The beach is easily accessible from the main road, making it very convenient for visitors of all ages to reach and enjoy.",
                             icon: "68dfa70d40c9f56ca1b044f2",
                         }
                     ],
@@ -122,7 +122,8 @@ export async function GET() {
             description: "Bharatpur Beach is a beautiful white sand beach located in Neil Island, famous for its coral reefs and water sports.",
             image: "68d7df93b57f8e206a9aa60f"
         }
-      } as any, // Cast to any to bypass strict type checking for the seed script
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
     });
     
     return NextResponse.json({ success: true, doc: newPage });
