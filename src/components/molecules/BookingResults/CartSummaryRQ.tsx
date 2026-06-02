@@ -378,8 +378,9 @@ export const CartSummaryRQ: React.FC<CartSummaryProps> = ({
                           </div>
                           <span className={styles.compactPrice}>
                             ₹{item.totalPrice.toLocaleString()}
-                            <div style={{ color: "#e74c3c", fontSize: "10px", fontWeight: "bold", marginTop: "2px" }}>
-                              Advance: ₹{(300 * item.quantity).toLocaleString()}
+                            <div style={{ color: "#e74c3c", fontSize: "11px", fontWeight: "600", marginTop: "4px", lineHeight: "1.3" }}>
+                              Advance: ₹{(300 * item.quantity).toLocaleString()}<br />
+                              <span style={{ fontSize: "10px", opacity: 0.9 }}>Rest at venue</span>
                             </div>
                           </span>
                         </div>
@@ -528,8 +529,9 @@ export const CartSummaryRQ: React.FC<CartSummaryProps> = ({
                       <div className={styles.mainPrice}>
                         <span>₹{item.totalPrice.toLocaleString()}</span>
                       </div>
-                      <div style={{ color: "#e74c3c", fontSize: "11px", fontWeight: "bold", lineHeight: "1.2" }}>
-                        Advance: ₹{(300 * item.quantity).toLocaleString()} | Rest at venue
+                      <div style={{ color: "#e74c3c", fontSize: "12px", fontWeight: "600", lineHeight: "1.3" }}>
+                        Advance: ₹{(300 * item.quantity).toLocaleString()}<br />
+                        <span style={{ fontSize: "11px", opacity: 0.9 }}>Rest at venue</span>
                       </div>
                       <div
                         className={`${styles.editableField} ${styles.guestCountClickable} ${styles.quantityInfo}`}
