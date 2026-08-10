@@ -158,13 +158,13 @@ export const PaymentFailedTemplate: React.FC<PaymentFailedTemplateProps> = ({
               </Text>
 
               <Text style={contactText}>
-                📞 Call us at: <strong>+91-9332908036</strong>
+                📞 Call us at: <strong>+91-XXXXX-XXXXX</strong>
               </Text>
               <Text style={contactText}>
                 📧 Email us: <strong>support@andamanexcursion.com</strong>
               </Text>
               <Text style={contactText}>
-                💬 WhatsApp: <strong>+91-9332908036</strong>
+                💬 WhatsApp: <strong>+91-XXXXX-XXXXX</strong>
               </Text>
               <Text style={contactText}>
                 🕒 Available: <strong>9:00 AM - 8:00 PM (IST)</strong>

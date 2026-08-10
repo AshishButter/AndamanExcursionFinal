@@ -209,7 +209,7 @@ export const BookingStatusUpdateTemplate: React.FC<
             {/* Contact Information */}
             <Section style={contactSection}>
               <Heading style={h2}>Need Help?</Heading>
-              <Text style={text}>📞 Phone: +91-9332908036</Text>
+              <Text style={text}>📞 Phone: +91-XXXXX-XXXXX</Text>
               <Text style={text}>📧 Email: support@andamanexcursion.com</Text>
               <Text style={text}>
                 🕒 Support Hours: 9:00 AM - 8:00 PM (IST)

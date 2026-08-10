@@ -116,7 +116,7 @@ export const EnquiryConfirmationTemplate: React.FC<
             <Text style={footerText}>
               If you have any immediate questions, please contact us at:
             </Text>
-            <Text style={footerText}>📞 +91-9332908036</Text>
+            <Text style={footerText}>📞 +91-XXXX-XXXX-XX</Text>
             <Text style={footerText}>📧 info@andamanexcursion.com</Text>
             <Text style={footerSubtext}>
               This email was sent regarding enquiry {enquiryId}. If you have any

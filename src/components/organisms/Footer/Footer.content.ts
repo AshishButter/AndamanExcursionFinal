@@ -63,7 +63,7 @@ export const footerItems = {
     title: "Contact Us",
     address:
       "No. 38, First Floor,New R.K Market Complex, Junglighat, Port Blair, Andaman and Nicobar Islands",
-    contact: "+91-9332908036",
+    contact: "+91-9933261956 I +91-9332908036",
     email: "andamanexcursion@gmail.com",
   },
   socialLinks: [

@@ -859,7 +859,7 @@ function categorizeBookingError(
         "✓ We'll offer you alternative seats on the same ferry\n" +
         "✓ If alternatives aren't suitable, we'll process a full refund within 5-7 business days\n\n" +
         "You'll receive an email at {email} with next steps.\n\n" +
-        "For immediate assistance, call us at +91-9332908036\n" +
+        "For immediate assistance, call us at +91-XXXX-XXXX\n" +
         "Booking Reference: {bookingId}",
     };
   }
@@ -939,6 +939,6 @@ function categorizeBookingError(
       "✓ You'll receive confirmation within 2-4 hours\n" +
       "✓ If any issues arise, we'll contact you immediately\n\n" +
       "Booking Reference: {bookingId}\n\n" +
-      "For questions, contact us at +91-9332908036",
+      "For questions, contact us at +91-XXXX-XXXX",
   };
 }

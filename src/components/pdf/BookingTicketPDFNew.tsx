@@ -648,7 +648,7 @@ const BookingTicketPDFNew: React.FC<BookingTicketPDFProps> = ({ data, qrCodeUrl 
           {/* Top Contact Bar */}
           <View style={styles.topBar}>
             <Text style={styles.contactInfo}>
-              Contact : +91-9332908036 Email : andamanexcursion@gmail.com
+              Contact : +91-9933261956 I +91-9332908036 Email : andamanexcursion@gmail.com
             </Text>
             <Text style={styles.topBookingId}>
               Booking ID: {providerPNR}
@@ -1201,7 +1201,7 @@ const BookingTicketPDFNew: React.FC<BookingTicketPDFProps> = ({ data, qrCodeUrl 
         {/* FOOTER */}
         <View style={styles.footer}>
           <Text style={styles.footerLeft}>
-            Contact : +91-9332908036
+            Contact : +91-9933261956 | +91-9332908036
           </Text>
           <Text style={styles.footerRight}>
             Email : andamanexcursion@gmail.com
