@@ -394,7 +394,10 @@ async function processBooking(
             bookingData.members?.[0]?.fullName ||
             "",
           customerEmail: bookingData.contactDetails?.email || "",
-          customerPhone: bookingData.contactDetails?.whatsapp || "",
+          customerPhone: bookingData.contactDetails?.whatsapp || 
+                         orderId || 
+                         paymentId || 
+                         "9999999999",
           nationality: bookingData.nationality || "Indian",
         },
 
@@ -682,7 +685,10 @@ async function processBooking(
             bookingData.members?.[0]?.fullName ||
             "",
           customerEmail: bookingData.contactDetails?.email || "",
-          customerPhone: bookingData.contactDetails?.whatsapp || "",
+          customerPhone: bookingData.contactDetails?.whatsapp || 
+                         orderId || 
+                         paymentId || 
+                         "9999999999",
           nationality: bookingData.nationality || "Indian",
         },
 

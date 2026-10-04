@@ -148,12 +148,12 @@ export async function POST(req: NextRequest) {
           req.url
         );
 
-        await fetch(statusCheckUrl.toString(), {
+        fetch(statusCheckUrl.toString(), {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
-        });
+        }).catch(e => console.error("Background status check failed", e));
 
         console.log("✅ Booking processing triggered via status check");
       } catch (error) {
