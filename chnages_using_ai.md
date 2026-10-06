@@ -1,0 +1,6 @@
+# Changes using AI
+
+- Investigated disk space issue (`ENOSPC`) and cleared Next.js cache.
+- Investigated Sealink Ferry API timeout issues and Makruzz credential errors.
+- Added and subsequently removed temporary test API route and frontend page for Sealink API.
+- Included prior pending fixes for PhonePe integration and PDF generation to be merged into production main repo.

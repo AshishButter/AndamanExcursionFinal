@@ -565,7 +565,10 @@ async function processBooking(
     });
 
     // Auto-generate and save PDF to database (from file 1)
-    await generateAndStorePDF(booking, payload);
+    const pdfUrl = await generateAndStorePDF(booking, payload);
+    if (pdfUrl) {
+      booking.pdfUrl = pdfUrl;
+    }
 
     console.log(
       "Full ferry booking object being returned:",
@@ -575,6 +578,7 @@ async function processBooking(
           passengers: booking.passengers,
           pricing: booking.pricing,
           customerInfo: booking.customerInfo,
+          pdfUrl: booking.pdfUrl,
         },
         null,
         2
@@ -756,7 +760,10 @@ async function processBooking(
     });
 
     // Auto-generate and save PDF to database (from file 1)
-    await generateAndStorePDF(booking, payload);
+    const pdfUrl = await generateAndStorePDF(booking, payload);
+    if (pdfUrl) {
+      booking.pdfUrl = pdfUrl;
+    }
 
     console.log(
       "Full booking object being returned:",
@@ -766,6 +773,7 @@ async function processBooking(
           passengers: booking.passengers,
           pricing: booking.pricing,
           customerInfo: booking.customerInfo,
+          pdfUrl: booking.pdfUrl,
         },
         null,
         2

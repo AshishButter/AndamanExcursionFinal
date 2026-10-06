@@ -104,6 +104,8 @@ export async function generateAndStorePDF(booking: any, payload: any) {
       booking.bookingId,
       pdfUrl
     );
+    
+    return pdfUrl;
   } catch (error: any) {
     // Non-blocking: log error but don't fail the booking flow
     console.error(
@@ -112,5 +114,6 @@ export async function generateAndStorePDF(booking: any, payload: any) {
       error?.message || error,
       error?.stack
     );
+    return null;
   }
 }

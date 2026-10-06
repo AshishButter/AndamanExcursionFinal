@@ -148,6 +148,21 @@ export class PhonePeServiceV2 {
     console.log("Checking PhonePe v2 payment status for:", merchantOrderId);
 
     try {
+      // In dev mode, bypass actual API call to avoid getting stuck on PENDING
+      if (this.devMode) {
+        console.log("🛠️ Dev Mode: Mocking SUCCESS status for", merchantOrderId);
+        return {
+          success: true,
+          state: "SUCCESS",
+          orderId: merchantOrderId,
+          amount: 1000,
+          paymentDetails: [],
+          metaInfo: {},
+          code: "PAYMENT_SUCCESS",
+          message: "Payment successful (Mocked)",
+        };
+      }
+
       // Get OAuth token
       const accessToken = await phonePeOAuthService.getAccessToken();
 
