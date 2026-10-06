@@ -385,9 +385,9 @@ export class MakruzzService {
       // Consolidate all classes from the group
       const classes: FerryClass[] = schedules.map((schedule) => {
         const baseFare = parseFloat(schedule.ship_class_price);
-        const cgstAmount = schedule.cgst_amount || 0;
-        const ugstAmount = schedule.ugst_amount || 0;
-        const psfAmount = schedule.psf || 0;
+        const cgstAmount = schedule.cgst_amount ? parseFloat(schedule.cgst_amount.toString()) : 0;
+        const ugstAmount = schedule.ugst_amount ? parseFloat(schedule.ugst_amount.toString()) : 0;
+        const psfAmount = schedule.psf ? parseFloat(schedule.psf.toString()) : 0;
         const fuelSurchargeAmount = schedule.fuel_surcharge ? parseFloat(schedule.fuel_surcharge.toString()) : 0;
         const totalPrice = baseFare + cgstAmount + ugstAmount + psfAmount + fuelSurchargeAmount;
 
