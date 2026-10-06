@@ -75,27 +75,11 @@ export class FerryBookingService {
           return await this.bookSealinkFerry(bookingRequest);
 
         case "makruzz":
-          if (bookingRequest.ferryId === "mock-ferry-mk" || bookingRequest.ferryId === "mk-mock") {
-            return {
-              success: true,
-              bookingReference: "MOCK-MK-123",
-              pnr: "MOCKPNR-MK",
-              providerBookingId: "PROVIDER-MK-789",
-              confirmationDetails: { mock: true },
-            };
-          }
+
           return await this.bookMakruzzFerry(bookingRequest);
 
         case "greenocean":
-          if (bookingRequest.ferryId === "mock-ferry-gn" || bookingRequest.ferryId === "gn-mock") {
-            return {
-              success: true,
-              bookingReference: "MOCK-GN-123",
-              pnr: "MOCKPNR-GN",
-              providerBookingId: "PROVIDER-GN-789",
-              confirmationDetails: { mock: true },
-            };
-          }
+
           return await this.bookGreenOceanFerry(bookingRequest);
 
         default:
