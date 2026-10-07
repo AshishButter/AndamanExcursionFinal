@@ -93,10 +93,15 @@ interface MakruzzConfirmResponse {
 }
 
 export class MakruzzService {
-  private static readonly BASE_URL =
-    process.env.MAKRUZZ_API_URL || "https://uat.makruzz.com/booking_api/";
-  private static readonly USERNAME = process.env.MAKRUZZ_USERNAME;
-  private static readonly PASSWORD = process.env.MAKRUZZ_PASSWORD;
+  private static get BASE_URL() {
+    return process.env.MAKRUZZ_API_URL || "https://uat.makruzz.com/booking_api/";
+  }
+  private static get USERNAME() {
+    return process.env.MAKRUZZ_USERNAME;
+  }
+  private static get PASSWORD() {
+    return process.env.MAKRUZZ_PASSWORD;
+  }
   private static authToken: string | null = null;
   private static tokenExpiry: Date | null = null;
 

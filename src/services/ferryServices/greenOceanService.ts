@@ -51,11 +51,15 @@ interface GreenOceanSeatLayoutResponse {
 }
 
 export class GreenOceanService {
-  private static readonly BASE_URL =
-    process.env.GREEN_OCEAN_API_URL ||
-    "https://tickets.greenoceanseaways.com/test-v-1.0-api/";
-  private static readonly PUBLIC_KEY = process.env.GREEN_OCEAN_PUBLIC_KEY;
-  private static readonly PRIVATE_KEY = process.env.GREEN_OCEAN_PRIVATE_KEY;
+  private static get BASE_URL() {
+    return process.env.GREEN_OCEAN_API_URL || "https://tickets.greenoceanseaways.com/test-v-1.0-api/";
+  }
+  private static get PUBLIC_KEY() {
+    return process.env.GREEN_OCEAN_PUBLIC_KEY;
+  }
+  private static get PRIVATE_KEY() {
+    return process.env.GREEN_OCEAN_PRIVATE_KEY;
+  }
 
   static async searchTrips(
     params: FerrySearchParams

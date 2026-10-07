@@ -76,11 +76,18 @@ interface SealinkBookingRequest {
 
 export class SealinkService {
   // Use production URLs and correct credentials
-  private static readonly BASE_URL =
-    process.env.SEALINK_API_URL || "http://api.dev.gonautika.com:8012/";
+  private static get BASE_URL() {
+    return process.env.SEALINK_API_URL || "http://api.dev.gonautika.com:8012/";
+  }
+
   // Use environment variables for credentials
-  private static readonly USERNAME = process.env.SEALINK_USERNAME || "";
-  private static readonly TOKEN = process.env.SEALINK_TOKEN || "";
+  private static get USERNAME() {
+    return process.env.SEALINK_USERNAME || "";
+  }
+
+  private static get TOKEN() {
+    return process.env.SEALINK_TOKEN || "";
+  }
 
   private static readonly tripDataCache = new Map<string, SealinkTripData>();
 
