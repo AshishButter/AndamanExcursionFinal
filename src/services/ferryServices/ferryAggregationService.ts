@@ -247,29 +247,10 @@ export class FerryAggregationService {
     message?: string;
   }> {
     try {
-      if (!process.env.SEALINK_USERNAME || !process.env.SEALINK_TOKEN) {
-        return { status: "offline", message: "Credentials not configured" };
-      }
-
-      const response = await fetch(
-        `${process.env.SEALINK_API_URL}getTripData`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date: new Date().toLocaleDateString("en-GB"),
-            from: "Port Blair",
-            to: "Swaraj Dweep",
-            userName: process.env.SEALINK_USERNAME,
-            token: process.env.SEALINK_TOKEN,
-          }),
-          signal: AbortSignal.timeout(5000), // 5 second timeout
-        }
-      );
-
-      return response.ok
+      const isOnline = await SealinkService.testAuthentication();
+      return isOnline
         ? { status: "online" }
-        : { status: "error", message: `HTTP ${response.status}` };
+        : { status: "offline", message: "Authentication failed" };
     } catch (error) {
       return {
         status: "offline",

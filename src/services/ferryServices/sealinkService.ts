@@ -1,5 +1,4 @@
 // src/services/ferryServices/sealinkService.ts
-import { FerryApiService } from "./ferryApiService";
 import { FerryCache } from "@/utils/ferryCache";
 import {
   FerrySearchParams,
@@ -8,177 +7,273 @@ import {
   SeatLayout,
 } from "@/types/FerryBookingSession.types";
 import { LocationMappingService } from "./locationMappingService";
+import { createHmac, randomUUID } from "node:crypto";
 
-interface SealinkTripData {
-  id: string;
-  tripId: number;
-  vesselID: number;
-  aTime: { hour: number; minute: number };
-  dTime: { hour: number; minute: number };
-  from: string;
-  to: string;
-  pClass: Record<string, SealinkSeat>;
-  bClass: Record<string, SealinkSeat>;
-  fares: {
-    pBaseFare: number;
-    bBaseFare: number;
-    infantFare: number;
+export interface GoNautikaSeat {
+  seatId: string;
+  seatNumber: string;
+  deck: string;
+  isAvailable: boolean;
+  isBooked: boolean;
+  isBlocked: boolean;
+}
+
+export interface GoNautikaSeatClass {
+  seatClassId: string;
+  seatClassName: string;
+  baseFare: number;
+  infantFare: number;
+  availableSeatCount: number;
+  seats: GoNautikaSeat[];
+}
+
+export interface GoNautikaTrip {
+  tripId: string;
+  origin: string;
+  destination: string;
+  tripDate: string;
+  departureTime: string;
+  arrivalTime: string;
+  departsAt: string;
+  vesselId: string;
+  vesselName: string;
+  seatClasses: GoNautikaSeatClass[];
+
+  // Compatibility aliases for legacy consumers
+  id?: string;
+  vesselID?: string | number;
+  from?: string;
+  to?: string;
+}
+
+export interface GoNautikaAgencyInfo {
+  agencyId: string;
+  agencyName: string;
+  phoneNumber?: string;
+  email?: string;
+  walletBalance: number;
+  overdraftLimit?: number;
+  availableFunds?: number;
+}
+
+export interface GoNautikaHoldResponse {
+  tripId: string;
+  expiresAt: string;
+  seats: Array<{
+    reservationId: string;
+    seatId: string;
+    seatNumber: string;
+    isSelected: boolean;
+  }>;
+}
+
+export interface GoNautikaBookingResponse {
+  bookingReference: string;
+  status: string;
+  tickets: Array<{
+    pnr: string;
+    tripId: string;
+    status: string;
+  }>;
+  charge: {
+    totalFare: number;
+    totalPassengerLevy: number;
+    totalFuelSurcharge: number;
+    tradeDiscountAmount: number;
+    amountCharged: number;
   };
 }
 
-interface SealinkSeat {
-  isBlocked: number;
-  isBooked: number;
-  number: string;
-  tier: string;
-}
+export type SealinkTripData = GoNautikaTrip;
 
-interface SealinkApiResponse {
-  err: string | null;
-  data: SealinkTripData[] | null;
-}
-
-interface SealinkBookingRequest {
-  id: string;
-  tripId: number;
-  vesselID: number;
+export interface SealinkBookingRequest {
+  id?: string;
+  tripId: string | number;
+  vesselID?: string | number;
   from: string;
   to: string;
-  bookingTS: number;
+  bookingTS?: number;
   paxDetail: {
     email: string;
     phone: string;
-    gstin: string;
+    gstin?: string;
     pax: Array<{
       name: string;
-      age: string;
+      age: string | number;
       gender: string;
-      nationality: string;
-      photoId: string;
-      expiry: string;
+      nationality?: string;
+      photoId?: string;
+      passport?: string;
+      expiry?: string;
       seat: string;
-      tier: string;
+      tier?: string;
     }>;
-    infantPax: any[];
+    infantPax?: Array<{
+      name: string;
+      dob?: string;
+      dobTS?: number;
+      gender?: string;
+      age?: string | number;
+      nationality?: string;
+    }>;
   };
-  userData: {
-    apiUser: {
-      userName: string;
-      agency: string;
-      token: string;
-      walletBalance: number;
+  userData?: {
+    apiUser?: {
+      userName?: string;
+      agency?: string;
+      token?: string;
+      walletBalance?: number;
     };
   };
-  paymentData: {
-    gstin: string;
+  paymentData?: {
+    gstin?: string;
   };
 }
 
 export class SealinkService {
-  // Use production URLs and correct credentials
-  private static get BASE_URL() {
-    return process.env.SEALINK_API_URL || "http://api.dev.gonautika.com:8012/";
+  /**
+   * Root API Base URL normalized without trailing slashes or subpaths
+   */
+  private static get BASE_URL(): string {
+    const raw = process.env.SEALINK_API_URL || "https://apitest.gonautika.com";
+    return raw.replace(/\/+$/, "").replace(/\/api\/v2\/?$/, "");
   }
 
-  // Use environment variables for credentials
-  private static get USERNAME() {
+  /**
+   * Agency Client ID (used as HMAC signing key)
+   */
+  private static get USERNAME(): string {
     return process.env.SEALINK_USERNAME || "";
   }
 
-  private static get TOKEN() {
+  /**
+   * Agency API Key (used as Bearer token)
+   */
+  private static get TOKEN(): string {
     return process.env.SEALINK_TOKEN || "";
   }
 
-  private static readonly tripDataCache = new Map<string, SealinkTripData>();
+  private static readonly tripDataCache = new Map<string, GoNautikaTrip>();
 
   /**
-   * Validate credentials with more robust checking
+   * Validate presence of credentials
    */
-  private static validateCredentials(): { username: string; token: string } {
+  private static validateCredentials(): { clientId: string; apiKey: string } {
     if (!this.USERNAME || !this.TOKEN) {
       throw new Error(
-        "Sealink credentials not found. Please set SEALINK_USERNAME and SEALINK_TOKEN in your .env file"
+        "Sealink/GoNautika credentials not found. Please set SEALINK_USERNAME and SEALINK_TOKEN in your .env file"
       );
     }
-
-    console.log("Sealink: Credentials validated");
-
     return {
-      username: this.USERNAME,
-      token: this.TOKEN,
+      clientId: this.USERNAME,
+      apiKey: this.TOKEN,
     };
   }
 
   /**
-   * Enhanced authentication test with exact Postman format
+   * Signs and sends a request conforming to GoNautika Agency API v2 specification
+   * String to sign: {METHOD}\n{pathAndQuery}\n{timestamp}\n{rawBody}
    */
-  private static async testAuthentication(): Promise<boolean> {
+  private static async sendV2Request<T = any>(
+    method: string,
+    pathAndQuery: string,
+    body?: any,
+    idempotencyKey?: string,
+    timeoutMs: number = 30000
+  ): Promise<{ status: number; body: T }> {
+    const { clientId, apiKey } = this.validateCredentials();
+
+    const raw = body === undefined ? "" : JSON.stringify(body);
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const payload = `${method.toUpperCase()}\n${pathAndQuery}\n${timestamp}\n${raw}`;
+    const signature = createHmac("sha256", clientId).update(payload).digest("hex");
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiKey}`,
+      "X-Nautika-Timestamp": timestamp,
+      "X-Nautika-Signature": signature,
+      Accept: "application/json",
+    };
+
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    if (idempotencyKey) {
+      headers["Idempotency-Key"] = idempotencyKey;
+    }
+
+    const controller = new AbortController();
+    const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-      console.log("Testing Sealink authentication...");
-
-      const { username, token } = this.validateCredentials();
-
-      // Use exact format from Postman getProfile endpoint
-      const apiCall = async (): Promise<any> => {
-        const response = await FerryApiService.fetchWithTimeout(
-          `${this.BASE_URL}getProfile`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "User-Agent": "AndamanExcursion/1.0",
-              Accept: "application/json",
-            },
-            body: JSON.stringify({
-              userName: username,
-              token: token,
-            }),
-          },
-          10000 // 10 second timeout for auth test
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        // Check if authentication was successful
-        if (data.err) {
-          throw new Error(`Auth failed: ${data.err}`);
-        }
-
-        return data.data;
-      };
-
-      const result = await FerryApiService.callWithRetry(
-        apiCall,
-        "Sealink-Auth",
-        false
-      );
-
-      console.log("Sealink authentication successful:", {
-        username: result.userName || username,
-        walletBalance: result.walletBalance,
+      const response = await fetch(`${this.BASE_URL}${pathAndQuery}`, {
+        method: method.toUpperCase(),
+        headers,
+        body: body === undefined ? undefined : raw,
+        signal: controller.signal,
       });
 
-      return true;
+      const responseText = await response.text();
+      let responseBody: any = null;
+
+      if (responseText) {
+        try {
+          responseBody = JSON.parse(responseText);
+        } catch {
+          responseBody = responseText;
+        }
+      }
+
+      return {
+        status: response.status,
+        body: responseBody,
+      };
+    } finally {
+      clearTimeout(timeoutTimer);
+    }
+  }
+
+  /**
+   * Test authentication against GoNautika API v2
+   */
+  static async testAuthentication(): Promise<boolean> {
+    try {
+      console.log("Sealink: Testing GoNautika API v2 authentication...");
+      const { status, body } = await this.sendV2Request<GoNautikaAgencyInfo>(
+        "GET",
+        "/api/v2/agency"
+      );
+
+      if (status === 200 && body) {
+        console.log("Sealink authentication successful:", {
+          agencyName: body.agencyName,
+          walletBalance: body.walletBalance,
+          availableFunds: body.availableFunds,
+        });
+        return true;
+      }
+
+      console.error("Sealink authentication rejected:", { status, body });
+      return false;
     } catch (error) {
-      console.error("Sealink authentication failed:", error);
+      console.error("Sealink authentication error:", error);
       return false;
     }
   }
 
+  /**
+   * Search trips on GoNautika API v2
+   */
   static async searchTrips(
     params: FerrySearchParams
   ): Promise<UnifiedFerryResult[]> {
     console.log(
-      `Sealink Service: Starting search for ${params.from} → ${params.to} on ${params.date}`
+      `Sealink Service: Starting v2 search for ${params.from} → ${params.to} on ${params.date}`
     );
 
-    const { username, token } = this.validateCredentials();
+    this.validateCredentials();
 
-    // Check if route is supported
     if (
       !LocationMappingService.isRouteSupported(
         "sealink",
@@ -192,7 +287,6 @@ export class SealinkService {
       return [];
     }
 
-    // Check cache first
     const cacheKey = FerryCache.generateKey(params, "sealink");
     const cached = FerryCache.get(cacheKey);
     if (cached) {
@@ -200,84 +294,55 @@ export class SealinkService {
       return cached;
     }
 
-    // Format date correctly (dd-mm-yyyy as per Postman)
+    const fromLocation = LocationMappingService.getSealinkLocation(params.from);
+    const toLocation = LocationMappingService.getSealinkLocation(params.to);
     const formattedDate = this.formatDateForSealink(params.date);
 
-    const apiCall = async (): Promise<SealinkApiResponse> => {
-      // Use proper location mapping for Sealink API
-      const fromLocation = LocationMappingService.getSealinkLocation(
-        params.from
-      );
-      const toLocation = LocationMappingService.getSealinkLocation(params.to);
+    console.log(`Sealink location mapping:`, {
+      originalFrom: params.from,
+      mappedFrom: fromLocation,
+      originalTo: params.to,
+      mappedTo: toLocation,
+      date: formattedDate,
+    });
 
-      console.log(`Sealink location mapping:`, {
-        originalFrom: params.from,
-        mappedFrom: fromLocation,
-        originalTo: params.to,
-        mappedTo: toLocation,
-      });
-
-      const response = await FerryApiService.fetchWithTimeout(
-        `${this.BASE_URL}getTripData`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent": "AndamanExcursion/1.0",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            date: formattedDate,
-            from: fromLocation, // Use mapped location name
-            to: toLocation, // Use mapped location name
-            userName: username,
-            token: token,
-          }),
-        },
-        8000
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      return await response.json();
-    };
+    const pathAndQuery = `/api/v2/trips?origin=${encodeURIComponent(
+      fromLocation
+    )}&destination=${encodeURIComponent(toLocation)}&date=${formattedDate}`;
 
     try {
-      const result = await FerryApiService.callWithRetry(
-        apiCall,
-        "Sealink-Search",
-        false
+      const { status, body } = await this.sendV2Request<GoNautikaTrip[]>(
+        "GET",
+        pathAndQuery
       );
 
-      if (result.err) {
-        console.error("Sealink search API error:", result.err);
-        if (result.err.includes("Token Validation Failed")) {
-          throw new Error(
-            "Sealink authentication failed. Please check credentials."
-          );
-        }
-        throw new Error(`Sealink search failed: ${result.err}`);
-      }
-
-      if (!result.data || !Array.isArray(result.data)) {
-        console.log("No trips found for Sealink");
+      if (status !== 200) {
+        console.error("Sealink search API error:", { status, body });
         return [];
       }
 
-      // Cache trip data for later use in booking
-      result.data.forEach((trip) => {
-        this.tripDataCache.set(trip.id, trip);
+      if (!Array.isArray(body) || body.length === 0) {
+        console.log("No trips found for Sealink on date:", formattedDate);
+        return [];
+      }
+
+      // Cache raw trips
+      body.forEach((trip) => {
+        // Populate backward-compatible properties
+        trip.id = trip.tripId;
+        trip.vesselID = trip.vesselId;
+        trip.from = trip.origin;
+        trip.to = trip.destination;
+
+        this.tripDataCache.set(trip.tripId, trip);
+        this.tripDataCache.set(`sealink-${trip.tripId}`, trip);
       });
 
-      const unifiedResults = result.data.map((trip) =>
+      const unifiedResults = body.map((trip) =>
         this.transformToUnifiedFormat(trip, params)
       );
 
-      // Cache results
       FerryCache.set(cacheKey, unifiedResults);
-
       console.log(`Sealink: Found ${unifiedResults.length} trips`);
       return unifiedResults;
     } catch (error) {
@@ -287,100 +352,108 @@ export class SealinkService {
   }
 
   /**
-   * Format date in dd-mm-yyyy format as required by Sealink API
+   * Format date into ISO YYYY-MM-DD format as required by GoNautika v2
    */
   private static formatDateForSealink(dateString: string): string {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
     const date = new Date(dateString);
-    const day = date.getDate().toString();
-    const month = (date.getMonth() + 1).toString();
-    const year = date.getFullYear().toString();
-    return `${day}-${month}-${year}`;
+    if (!isNaN(date.getTime())) {
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const day = date.getDate().toString().padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+    return dateString;
   }
 
+  /**
+   * Transform GoNautika v2 trip to UnifiedFerryResult
+   */
   private static transformToUnifiedFormat(
-    trip: SealinkTripData,
+    trip: GoNautikaTrip,
     params: FerrySearchParams
   ): UnifiedFerryResult {
-    const pClassSeats = Object.values(trip.pClass || {});
-    const bClassSeats = Object.values(trip.bClass || {});
-
-    const pAvailable = pClassSeats.filter(
-      (seat) => seat.isBooked === 0 && seat.isBlocked === 0
-    ).length;
-    const bAvailable = bClassSeats.filter(
-      (seat) => seat.isBooked === 0 && seat.isBlocked === 0
-    ).length;
-
-    const fuelSurcharge = 550;
+    const fuelSurcharge = 350;
+    const passengerLevy = 50;
+    const feesAndSurcharges = fuelSurcharge + passengerLevy;
 
     const classes: FerryClass[] = [];
+    let totalSeatsAcrossClasses = 0;
+    let availableSeatsAcrossClasses = 0;
+    let minBaseFare = Number.MAX_SAFE_INTEGER;
 
-    if (pClassSeats.length > 0) {
-      const pTotal = trip.fares.pBaseFare + fuelSurcharge;
+    for (const sc of trip.seatClasses || []) {
+      const isRoyal =
+        sc.seatClassName.toLowerCase().includes("royal") ||
+        sc.seatClassName.toLowerCase().includes("business");
+      const classSlug = isRoyal ? "business" : "premium";
+      const tier: "B" | "P" = isRoyal ? "B" : "P";
+
+      const totalClassPrice = sc.baseFare + feesAndSurcharges;
+      if (sc.baseFare < minBaseFare) {
+        minBaseFare = sc.baseFare;
+      }
+
+      totalSeatsAcrossClasses += sc.seats?.length || 0;
+      availableSeatsAcrossClasses += sc.availableSeatCount || 0;
+
       classes.push({
-        id: `${trip.id}-premium`,
-        name: "Premium",
-        price: pTotal,
-        availableSeats: pAvailable,
-        amenities: ["Air Conditioning", "Comfortable Seating"],
-        seatLayout: this.createSeatLayout(pClassSeats, "P"),
+        id: `${trip.tripId}-${classSlug}`,
+        name: sc.seatClassName,
+        className: sc.seatClassName,
+        price: totalClassPrice,
+        availableSeats: sc.availableSeatCount,
+        amenities: isRoyal
+          ? ["Royal Seating", "Air Conditioning", "Priority Boarding"]
+          : ["Air Conditioning", "Comfortable Seating"],
+        seatLayout: this.createSeatLayout(sc.seats, tier, trip),
         pricing: {
-          basePrice: trip.fares.pBaseFare,
+          basePrice: sc.baseFare,
           taxes: 0,
-          fees: 0,
+          fees: passengerLevy,
           fuelSurcharge: fuelSurcharge,
-          total: pTotal,
+          total: totalClassPrice,
         },
       });
     }
 
-    if (bClassSeats.length > 0) {
-      const bTotal = trip.fares.bBaseFare + fuelSurcharge;
-      classes.push({
-        id: `${trip.id}-business`,
-        name: "Business",
-        price: bTotal,
-        availableSeats: bAvailable,
-        amenities: ["Premium Seating", "Air Conditioning", "Priority Boarding"],
-        seatLayout: this.createSeatLayout(bClassSeats, "B"),
-        pricing: {
-          basePrice: trip.fares.bBaseFare,
-          taxes: 0,
-          fees: 0,
-          fuelSurcharge: fuelSurcharge,
-          total: bTotal,
-        },
-      });
+    if (minBaseFare === Number.MAX_SAFE_INTEGER) {
+      minBaseFare = 0;
     }
+
+    const departureHHmm = trip.departureTime?.substring(0, 5) || "00:00";
+    const arrivalHHmm = trip.arrivalTime?.substring(0, 5) || "00:00";
 
     return {
-      id: `sealink-${trip.id}`,
+      id: `sealink-${trip.tripId}`,
       operator: "sealink",
-      operatorFerryId: trip.id,
-      ferryName: trip.vesselID === 1 ? "Sealink" : "Nautika",
+      operatorFerryId: trip.tripId,
+      ferryName: trip.vesselName || "Nautika",
       route: {
-        from: { name: trip.from, code: this.getLocationCode(trip.from) },
-        to: { name: trip.to, code: this.getLocationCode(trip.to) },
-        fromCode: this.getLocationCode(trip.from),
-        toCode: this.getLocationCode(trip.to),
+        from: { name: trip.origin, code: this.getLocationCode(trip.origin) },
+        to: { name: trip.destination, code: this.getLocationCode(trip.destination) },
+        fromCode: this.getLocationCode(trip.origin),
+        toCode: this.getLocationCode(trip.destination),
       },
       schedule: {
-        departureTime: this.formatTime(trip.dTime),
-        arrivalTime: this.formatTime(trip.aTime),
-        duration: this.calculateDuration(trip.dTime, trip.aTime),
+        departureTime: departureHHmm,
+        arrivalTime: arrivalHHmm,
+        duration: this.calculateDuration(trip.departureTime, trip.arrivalTime),
         date: params.date,
       },
       classes,
       availability: {
-        totalSeats: pClassSeats.length + bClassSeats.length,
-        availableSeats: pAvailable + bAvailable,
+        totalSeats: totalSeatsAcrossClasses,
+        availableSeats: availableSeatsAcrossClasses,
         lastUpdated: new Date().toISOString(),
       },
       pricing: {
-        baseFare: Math.min(trip.fares.pBaseFare, trip.fares.bBaseFare),
+        baseFare: minBaseFare,
         taxes: 0,
-        portFee: 0,
-        total: Math.min(trip.fares.pBaseFare, trip.fares.bBaseFare) + fuelSurcharge,
+        portFee: passengerLevy,
+        total: minBaseFare + feesAndSurcharges,
         currency: "INR",
       },
       features: {
@@ -393,8 +466,9 @@ export class SealinkService {
       operatorData: {
         originalResponse: {
           ...trip,
+          id: trip.tripId,
           tripId: trip.tripId,
-          vesselID: trip.vesselID,
+          vesselID: trip.vesselId,
         },
         bookingEndpoint: "bookSeats",
       },
@@ -403,387 +477,278 @@ export class SealinkService {
   }
 
   /**
-   * CORRECTED: Book seats with exact format from working curl
+   * Book seats using GoNautika API v2
+   * Step 1: POST /api/v2/seat-holds
+   * Step 2: POST /api/v2/bookings (with Idempotency-Key)
    */
   static async bookSeats(bookingData: SealinkBookingRequest): Promise<any> {
+    let heldReservationIds: string[] = [];
+
     try {
-      console.log("Sealink: Creating seat booking...", {
-        tripId: bookingData.tripId,
-        passengers: bookingData.paxDetail.pax.length,
-        seats: bookingData.paxDetail.pax.map((p) => p.seat),
+      console.log("Sealink: Starting GoNautika v2 seat booking...", {
+        tripId: bookingData.tripId || bookingData.id,
+        passengersCount: bookingData.paxDetail?.pax?.length,
+        seats: bookingData.paxDetail?.pax?.map((p) => p.seat),
       });
 
-      // Test authentication first
-      const authOk = await this.testAuthentication();
-      if (!authOk) {
+      const rawTripId = String(bookingData.tripId || bookingData.id || "");
+      const cleanTripId = rawTripId.replace("sealink-", "");
+
+      // 1. Resolve trip data from cache or refetch
+      let trip = this.tripDataCache.get(cleanTripId);
+      if (!trip) {
+        console.warn(`Trip data not in cache for ${cleanTripId}, attempting refetch...`);
+        const travelDate = bookingData.bookingTS
+          ? new Date(bookingData.bookingTS * 1000).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0];
+
+        const refetched = await this.refetchTripDataForSeatLayout(cleanTripId, travelDate);
+        if (refetched) {
+          trip = refetched;
+        }
+      }
+
+      if (!trip) {
         throw new Error(
-          "Sealink authentication failed. Please check credentials."
+          `Trip data not found for ID: ${cleanTripId}. Cannot locate seats for booking.`
         );
       }
 
-      const { username, token } = this.validateCredentials();
-
-      // CORRECTED: Use exact Sealink API structure as per working curl example
-      const bookingToken = token;
-
-      // Separate seats by class for the API
-      const pClassSeats: string[] = [];
-      const bClassSeats: string[] = [];
-
-      // Validate and separate seats by class
-      console.log("Seat validation for Sealink booking:");
-      bookingData.paxDetail.pax.forEach((passenger, index) => {
-        console.log(
-          `  Passenger ${index + 1}: tier=${passenger.tier}, seat=${
-            passenger.seat
-          }`
-        );
-
-        if (
-          (passenger.tier === "P" || passenger.tier === "L") &&
-          passenger.seat
-        ) {
-          pClassSeats.push(passenger.seat);
-        } else if (
-          (passenger.tier === "B" || passenger.tier === "R") &&
-          passenger.seat
-        ) {
-          bClassSeats.push(passenger.seat);
+      // 2. Map requested seat numbers to seatIds (UUIDs)
+      const seatNumberToId = new Map<string, string>();
+      for (const sc of trip.seatClasses || []) {
+        for (const s of sc.seats || []) {
+          seatNumberToId.set(s.seatNumber.toUpperCase().trim(), s.seatId);
         }
+      }
+
+      const ticketedPassengers = bookingData.paxDetail?.pax || [];
+      const seatIdsToHold: string[] = [];
+
+      for (const p of ticketedPassengers) {
+        const seatNum = (p.seat || "").toUpperCase().trim();
+        if (!seatNum) {
+          throw new Error(`Passenger ${p.name} has no seat selected.`);
+        }
+        const seatId = seatNumberToId.get(seatNum);
+        if (!seatId) {
+          throw new Error(
+            `Seat number "${p.seat}" could not be found on trip ${trip.tripId}. Available seats may have changed.`
+          );
+        }
+        seatIdsToHold.push(seatId);
+      }
+
+      // 3. Step 1: Hold seats via POST /api/v2/seat-holds
+      console.log("Sealink v2: Holding seats...", {
+        tripId: trip.tripId,
+        seatIds: seatIdsToHold,
       });
 
-      console.log("Seat arrays prepared:", {
-        pClassSeats,
-        bClassSeats,
-        totalSeats: pClassSeats.length + bClassSeats.length,
-        totalPassengers: bookingData.paxDetail.pax.length,
+      const holdRes = await this.sendV2Request<GoNautikaHoldResponse>(
+        "POST",
+        "/api/v2/seat-holds",
+        {
+          tripId: trip.tripId,
+          seatIds: seatIdsToHold,
+        }
+      );
+
+      if (holdRes.status !== 201 || !holdRes.body?.seats) {
+        const errorDetail =
+          (holdRes.body as any)?.detail ||
+          (holdRes.body as any)?.title ||
+          JSON.stringify(holdRes.body);
+        throw new Error(`Failed to hold seats: ${errorDetail}`);
+      }
+
+      heldReservationIds = holdRes.body.seats.map((s) => s.reservationId);
+      console.log("Sealink v2: Seats held successfully:", {
+        heldCount: heldReservationIds.length,
+        expiresAt: holdRes.body.expiresAt,
       });
 
-      const requestBody = {
-        bookingData: [
-          {
-            bookingTS: bookingData.bookingTS,
-            id: bookingData.id,
-            tripId: bookingData.tripId,
-            vesselID: bookingData.vesselID,
-            from: bookingData.from,
-            to: bookingData.to,
-            paxDetail: {
-              email: bookingData.paxDetail.email,
-              phone: bookingData.paxDetail.phone,
-              gstin: bookingData.paxDetail.gstin || "",
-              pax: bookingData.paxDetail.pax.map((passenger, index) => ({
-                id: index + 1,
-                name: passenger.name,
-                age: passenger.age.toString(),
-                gender: passenger.gender, // M/F
-                nationality: "India",
-                passport: passenger.photoId || "", // Use passport field, not photoId
-                tier:
-                  passenger.tier === "R"
-                    ? "B"
-                    : passenger.tier === "L"
-                    ? "P"
-                    : passenger.tier, // Convert R->B, L->P for API
-                seat: passenger.seat || "",
-                isCancelled: 0,
-              })),
-              infantPax: (bookingData.paxDetail.infantPax || []).map(
-                (infant, index) => ({
-                  id: index + 1,
-                  name: infant.name,
-                  dobTS: Math.floor(
-                    new Date(infant.dob || "2022-01-01").getTime() / 1000
-                  ),
-                  dob: infant.dob || "2022-01-01",
-                  gender: infant.gender || "M",
-                  nationality: "India",
-                  passport: "",
-                  isCancelled: 0,
-                })
-              ),
-              bClassSeats,
-              pClassSeats,
-            },
-            userData: {
-              apiUser: {
-                userName: username,
-                agency: bookingData.userData.apiUser.agency || "",
-                token: bookingToken,
-                walletBalance: bookingData.userData.apiUser.walletBalance || 0,
-              },
-            },
-            paymentData: {
-              gstin: bookingData.paymentData.gstin || "",
-            },
-          },
-        ],
-        userName: username,
-        token: bookingToken,
+      // 4. Step 2: Prepare passengers with reservationIds
+      const seatIdToResId = new Map<string, string>();
+      const seatNumToResId = new Map<string, string>();
+      for (const s of holdRes.body.seats) {
+        seatIdToResId.set(s.seatId, s.reservationId);
+        if (s.seatNumber) {
+          seatNumToResId.set(s.seatNumber.toUpperCase().trim(), s.reservationId);
+        }
+      }
+
+      const bookingPassengers = ticketedPassengers.map((p, idx) => {
+        const seatNum = (p.seat || "").toUpperCase().trim();
+        const seatId = seatNumberToId.get(seatNum);
+        const reservationId =
+          (seatId ? seatIdToResId.get(seatId) : undefined) ||
+          seatNumToResId.get(seatNum);
+
+        if (!reservationId) {
+          throw new Error(`No reservation ID found for seat ${p.seat}`);
+        }
+
+        const fullName = (p.name || "").trim();
+        const nameParts = fullName.split(/\s+/);
+        const firstName = nameParts[0] || `Passenger${idx + 1}`;
+        const lastName = nameParts.slice(1).join(" ") || ".";
+
+        const genderNormalized =
+          p.gender === "Female" || p.gender === "F" || p.gender === "female"
+            ? "F"
+            : "M";
+
+        const ageNum =
+          typeof p.age === "number" ? p.age : parseInt(String(p.age), 10) || 30;
+
+        const nationalityNorm =
+          p.nationality === "Indian" || !p.nationality
+            ? "India"
+            : p.nationality;
+
+        const passengerObj: any = {
+          reservationId,
+          firstName,
+          lastName,
+          gender: genderNormalized,
+          age: ageNum,
+          nationality: nationalityNorm,
+        };
+
+        if (p.passport || p.photoId) {
+          passengerObj.passportNumber = p.passport || p.photoId;
+        }
+
+        return passengerObj;
+      });
+
+      // Add infant passengers (infants take no seat and carry no reservationId)
+      for (const infant of bookingData.paxDetail.infantPax || []) {
+        const infantFullName = (infant.name || "").trim();
+        const nameParts = infantFullName.split(/\s+/);
+        const firstName = nameParts[0] || "Infant";
+        const lastName = nameParts.slice(1).join(" ") || ".";
+        const genderNorm =
+          infant.gender === "Female" || infant.gender === "F" ? "F" : "M";
+
+        bookingPassengers.push({
+          firstName,
+          lastName,
+          gender: genderNorm,
+          age: infant.age ? parseInt(String(infant.age), 10) : 1,
+          nationality: "India",
+        });
+      }
+
+      // Format contact phone (digits only)
+      let phone = (bookingData.paxDetail.phone || "").replace(/\D/g, "");
+      if (phone.length === 12 && phone.startsWith("91")) {
+        phone = phone.substring(2);
+      }
+      if (!phone) {
+        phone = "9999999999";
+      }
+
+      const bookingPayload = {
+        reservationIds: heldReservationIds,
+        passengers: bookingPassengers,
+        contact: {
+          email: bookingData.paxDetail.email || "support@andamanexcursion.com",
+          phone: phone,
+        },
+        remarks: `Booking via Andaman Excursion (${bookingData.from} to ${bookingData.to})`,
       };
 
-      const firstBooking = requestBody.bookingData[0];
-      console.log("Sealink booking request (matching API documentation):", {
-        isCorrectStructure: !!requestBody.bookingData,
-        tripId: firstBooking.tripId,
-        vesselID: firstBooking.vesselID,
-        passengersCount: firstBooking.paxDetail.pax.length,
-        tierFormat: firstBooking.paxDetail.pax.map((p: any) => p.tier),
-        seatNumbers: firstBooking.paxDetail.pax.map((p: any) => p.seat),
-        nationalityFormat: firstBooking.paxDetail.pax[0]?.nationality,
-        from: firstBooking.from,
-        to: firstBooking.to,
-        hasRootAuth: !!(requestBody.userName && requestBody.token),
-        pClassSeats: firstBooking.paxDetail.pClassSeats,
-        bClassSeats: firstBooking.paxDetail.bClassSeats,
+      const idempotencyKey = randomUUID();
+
+      console.log("Sealink v2: Submitting booking...", {
+        idempotencyKey,
+        reservationCount: heldReservationIds.length,
+        passengersCount: bookingPassengers.length,
       });
 
-      console.log("Seat/Tier validation details:", {
-        requestedSeats: firstBooking.paxDetail.pax.map(
-          (p) => `${p.seat}(${p.tier})`
-        ),
-        pClassSeatsArray: firstBooking.paxDetail.pClassSeats,
-        bClassSeatsArray: firstBooking.paxDetail.bClassSeats,
-        totalSeatsRequested: firstBooking.paxDetail.pax.length,
-      });
-
-
-
-      const response = await this.fetchWithRetry(
-        `${this.BASE_URL}bookSeats`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "text/plain", // FIXED: Use text/plain as required by Sealink API
-            "User-Agent": "AndamanExcursion/1.0",
-            Accept: "application/json",
-          },
-          body: JSON.stringify(requestBody),
-        },
-        90000 // Keep longer timeout
+      const bookRes = await this.sendV2Request<GoNautikaBookingResponse>(
+        "POST",
+        "/api/v2/bookings",
+        bookingPayload,
+        idempotencyKey,
+        60000
       );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Sealink booking HTTP error:", {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText.substring(0, 500),
+      if (bookRes.status !== 201 || !bookRes.body) {
+        const problem = bookRes.body as any;
+        const errorMsg =
+          problem?.detail ||
+          problem?.title ||
+          `HTTP ${bookRes.status}: Booking failed`;
+
+        console.error("Sealink v2 booking failed:", {
+          status: bookRes.status,
+          problem,
         });
-        throw new Error(
-          `Sealink booking HTTP error: ${
-            response.status
-          } - ${errorText.substring(0, 200)}`
-        );
+
+        // Release holds cleanly on failure
+        await this.releaseHolds(heldReservationIds);
+
+        throw new Error(`Sealink booking failed: ${errorMsg}`);
       }
 
-      const responseText = await response.text();
-      console.log("Sealink booking raw response:", responseText);
+      const result = bookRes.body;
+      const primaryPnr =
+        result.tickets?.[0]?.pnr || result.bookingReference || "";
 
-      let parsedResponse: any;
-      try {
-        parsedResponse = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error("Sealink booking JSON parse error:", parseError);
-        throw new Error(
-          `Invalid JSON response: ${responseText.substring(0, 200)}...`
-        );
-      }
+      console.log("Sealink v2 booking SUCCESSFUL:", {
+        bookingReference: result.bookingReference,
+        pnr: primaryPnr,
+        status: result.status,
+        charge: result.charge,
+      });
 
-      // Handle array response (as shown in working curl)
-      if (Array.isArray(parsedResponse)) {
-        const bookingResult = parsedResponse[0];
-
-        if (bookingResult && bookingResult.seatStatus && bookingResult.pnr) {
-          console.log("Sealink booking successful:", {
-            pnr: bookingResult.pnr,
-            seatStatus: bookingResult.seatStatus,
-            index: bookingResult.index,
-          });
-
-          return {
-            seatStatus: bookingResult.seatStatus,
-            pnr: bookingResult.pnr,
-            index: bookingResult.index || 0,
-            requestData: bookingResult.requestData,
-          };
-        } else if (bookingResult && bookingResult.err) {
-          console.error("Sealink booking API error:", bookingResult.err);
-          throw new Error(`Sealink booking failed: ${bookingResult.err}`);
-        } else if (bookingResult && bookingResult.seatStatus === false) {
-          // Handle failed booking with seatStatus: false
-          console.error(
-            "Sealink booking failed - seats not available:",
-            bookingResult
-          );
-
-          // Try to extract error details from requestData if available
-          let errorMessage = "Seat booking failed";
-          let requestedSeats: string[] = [];
-
-          // Try to extract more detailed error information
-          if (bookingResult.requestData) {
-            try {
-              const requestData = JSON.parse(bookingResult.requestData);
-              requestedSeats = [
-                ...(requestData.paxDetail?.bClassSeats || []),
-                ...(requestData.paxDetail?.pClassSeats || []),
-              ];
-
-              if (requestedSeats.length > 0) {
-                errorMessage = `Seats not available: ${requestedSeats.join(
-                  ", "
-                )}. These seats may already be booked or do not exist.`;
-              } else {
-                errorMessage =
-                  "No seats were requested or seat selection failed.";
-              }
-
-              console.error("Sealink seat booking failure details:", {
-                requestedBClassSeats: requestData.paxDetail?.bClassSeats,
-                requestedPClassSeats: requestData.paxDetail?.pClassSeats,
-                tripId: requestData.tripId,
-                vesselID: requestData.vesselID,
-                from: requestData.from,
-                to: requestData.to,
-              });
-            } catch (parseError) {
-              console.warn(
-                "Could not parse requestData for error details:",
-                parseError
-              );
-              errorMessage = "Booking failed - unable to parse error details";
-            }
-          }
-
-          throw new Error(errorMessage);
-        }
-      }
-
-      // Handle single object response
-      if (parsedResponse.seatStatus && parsedResponse.pnr) {
-        return parsedResponse;
-      }
-
-      // Handle error response
-      if (parsedResponse.err) {
-        console.error("Sealink booking API error:", parsedResponse.err);
-
-        // If token validation failed, provide more detailed debugging info
-        if (parsedResponse.err.includes("Token Validation Failed")) {
-          console.error("Token validation failed. Check SEALINK_TOKEN in .env");
-
-          throw new Error(
-            `Sealink token validation failed. Please check your SEALINK_TOKEN in .env file. ` +
-              `The token might be expired or invalid for the booking API. ` +
-              `Current token length: ${bookingToken.length} characters.`
-          );
-        }
-
-        throw new Error(`Sealink booking failed: ${parsedResponse.err}`);
-      }
-
-      console.error("Unexpected Sealink response format:", parsedResponse);
-      throw new Error(
-        `Unexpected response format: ${JSON.stringify(parsedResponse)}`
-      );
+      // Return unified response compatible with ferryBookingService
+      return {
+        seatStatus: true,
+        pnr: primaryPnr,
+        bookingReference: result.bookingReference,
+        tickets: result.tickets,
+        charge: result.charge,
+        status: result.status,
+      };
     } catch (error) {
-      console.error("Sealink booking API error:", error);
-
-      // Enhanced error handling for timeouts
-      if (error instanceof Error && error.message.includes("timeout")) {
-        throw new Error(
-          "Sealink booking request timed out. This may indicate server issues or network problems. Please try again or contact support."
-        );
+      console.error("Sealink booking process error:", error);
+      // Attempt cleanup if any holds remain
+      if (heldReservationIds.length > 0) {
+        await this.releaseHolds(heldReservationIds).catch(() => {});
       }
-
       throw error;
     }
   }
 
   /**
-   * CRITICAL: Fetch with proper retry logic and timeout handling
+   * Release seat holds immediately via DELETE /api/v2/seat-holds
    */
-  private static async fetchWithRetry(
-    url: string,
-    options: RequestInit,
-    timeout: number = 90000
-  ): Promise<Response> {
-    const maxRetries = 2;
-    let lastError: Error = new Error("Unknown error occurred");
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(
-          `Sealink fetch attempt ${attempt}/${maxRetries} (timeout: ${timeout}ms)`
-        );
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          controller.abort();
-          console.warn(`Aborting request after ${timeout}ms`);
-        }, timeout);
-
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        return response;
-      } catch (error) {
-        lastError = error as Error;
-
-        console.warn(`Sealink fetch attempt ${attempt} failed:`, {
-          error: lastError.message,
-          isAbortError: lastError.name === "AbortError",
-          willRetry:
-            attempt < maxRetries && !this.isNonRetryableError(lastError),
-        });
-
-        // Don't retry on authentication errors or client errors
-        if (this.isNonRetryableError(lastError)) {
-          break;
-        }
-
-        // Don't retry timeouts to prevent double bookings
-        if (lastError.name === "AbortError" && attempt === 1) {
-          console.warn("Not retrying timeout to prevent double booking");
-          break;
-        }
-
-        // Wait before retry with exponential backoff
-        if (attempt < maxRetries) {
-          const delay = Math.min(Math.pow(2, attempt) * 1000, 3000);
-          console.log(`Waiting ${delay}ms before retry...`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
+  private static async releaseHolds(reservationIds: string[]): Promise<void> {
+    if (!reservationIds || reservationIds.length === 0) return;
+    try {
+      console.log(`Sealink v2: Releasing ${reservationIds.length} seat hold(s)...`);
+      const res = await this.sendV2Request(
+        "DELETE",
+        "/api/v2/seat-holds",
+        { reservationIds }
+      );
+      if (res.status === 204) {
+        console.log("Sealink v2: Holds released cleanly.");
+      } else {
+        console.warn("Sealink v2: Release holds response:", res.status);
       }
+    } catch (err) {
+      console.warn("Sealink v2: Error releasing holds:", err);
     }
-
-    // Transform AbortError to timeout error
-    if (lastError.name === "AbortError") {
-      throw new Error(`Request timeout after ${timeout}ms`);
-    }
-
-    throw lastError;
   }
 
   /**
-   * Check if error should not be retried
+   * Get seat layout for a ferry trip and class
    */
-  private static isNonRetryableError(error: Error): boolean {
-    const message = error.message.toLowerCase();
-    return (
-      message.includes("unauthorized") ||
-      message.includes("forbidden") ||
-      message.includes("invalid credentials") ||
-      message.includes("bad request") ||
-      message.includes("not found") ||
-      message.includes("token validation failed")
-    );
-  }
-
   static async getSeatLayout(
     ferryId: string,
     classId: string,
@@ -793,68 +758,41 @@ export class SealinkService {
       `SealinkService: Getting seat layout for ferry ${ferryId}, class ${classId}`
     );
 
-    // Extract original trip ID if it has "sealink-" prefix
-    const originalTripId = ferryId.startsWith("sealink-")
+    const cleanTripId = ferryId.startsWith("sealink-")
       ? ferryId.replace("sealink-", "")
       : ferryId;
 
-    console.log(
-      `SealinkService: Looking for trip data with ID: ${originalTripId}`
-    );
-    console.log(
-      `SealinkService: Available cached trip IDs:`,
-      Array.from(this.tripDataCache.keys())
-    );
+    let tripData = this.tripDataCache.get(cleanTripId);
 
-    const cachedTripData = this.tripDataCache.get(originalTripId);
-
-    if (cachedTripData) {
-      console.log(
-        `SealinkService: Found cached trip data for ${originalTripId}`
+    if (!tripData) {
+      console.log(`SealinkService: Trip data not in cache for ${cleanTripId}, refetching...`);
+      const refetched = await this.refetchTripDataForSeatLayout(
+        cleanTripId,
+        travelDate
       );
-      return this.extractSeatLayoutFromTripData(cachedTripData, classId);
+      if (refetched) {
+        tripData = refetched;
+      }
     }
 
-    // If not in cache, try to re-fetch trip data using stored search params
-    console.log(
-      `SealinkService: Trip data not found in cache for ${originalTripId}`
-    );
-
-    // Try to reconstruct search parameters from the ferry ID and travel date
-    const searchResult = await this.refetchTripDataForSeatLayout(
-      originalTripId,
-      travelDate
-    );
-
-    if (searchResult) {
-      console.log(
-        `SealinkService: Successfully re-fetched trip data for ${originalTripId}`
+    if (!tripData) {
+      throw new Error(
+        `Trip data not found for ferry ID: ${ferryId} (original: ${cleanTripId}). Unable to reconstruct seat layout.`
       );
-      return this.extractSeatLayoutFromTripData(searchResult, classId);
     }
 
-    throw new Error(
-      `Trip data not found for ferry ID: ${ferryId} (original: ${originalTripId}). ` +
-        `Unable to re-fetch trip data. This may happen if the trip is no longer available ` +
-        `or if the search parameters cannot be reconstructed.`
-    );
+    return this.extractSeatLayoutFromTripData(tripData, classId);
   }
 
   /**
-   * Re-fetch trip data when cache is empty for seat layout requests
+   * Refetch trip data by searching common routes for a date
    */
   private static async refetchTripDataForSeatLayout(
     tripId: string,
     travelDate: string
-  ): Promise<SealinkTripData | null> {
+  ): Promise<GoNautikaTrip | null> {
     try {
-      console.log(
-        `SealinkService: Attempting to re-fetch trip data for ${tripId} on ${travelDate}`
-      );
-
-      const { username, token } = this.validateCredentials();
       const formattedDate = this.formatDateForSealink(travelDate);
-
       const commonRoutes = [
         { from: "Port Blair", to: "Swaraj Dweep" },
         { from: "Port Blair", to: "Shaheed Dweep" },
@@ -866,117 +804,101 @@ export class SealinkService {
 
       for (const route of commonRoutes) {
         try {
-          const apiCall = async (): Promise<SealinkApiResponse> => {
-            const response = await FerryApiService.fetchWithTimeout(
-              `${this.BASE_URL}getTripData`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "User-Agent": "AndamanExcursion/1.0",
-                  Accept: "application/json",
-                },
-                body: JSON.stringify({
-                  date: formattedDate,
-                  from: route.from,
-                  to: route.to,
-                  userName: username,
-                  token: token,
-                }),
-              },
-              12000
-            );
+          const pathAndQuery = `/api/v2/trips?origin=${encodeURIComponent(
+            route.from
+          )}&destination=${encodeURIComponent(route.to)}&date=${formattedDate}`;
 
-            if (!response.ok) {
-              throw new Error(
-                `HTTP ${response.status}: ${response.statusText}`
-              );
-            }
-
-            return await response.json();
-          };
-
-          const result = await FerryApiService.callWithRetry(
-            apiCall,
-            "Sealink-Refetch",
-            false
+          const { status, body } = await this.sendV2Request<GoNautikaTrip[]>(
+            "GET",
+            pathAndQuery
           );
 
-          if (result.err) {
-            continue;
-          }
+          if (status === 200 && Array.isArray(body)) {
+            for (const t of body) {
+              t.id = t.tripId;
+              t.vesselID = t.vesselId;
+              t.from = t.origin;
+              t.to = t.destination;
+              this.tripDataCache.set(t.tripId, t);
+              this.tripDataCache.set(`sealink-${t.tripId}`, t);
+            }
 
-          if (result.data && Array.isArray(result.data)) {
-            const targetTrip = result.data.find((trip) => trip.id === tripId);
-
-            if (targetTrip) {
-              // Cache all trips from this search
-              result.data.forEach((trip) => {
-                this.tripDataCache.set(trip.id, trip);
-              });
-
-              return targetTrip;
+            const match = body.find((t) => t.tripId === tripId);
+            if (match) {
+              return match;
             }
           }
-        } catch (error) {
+        } catch {
           continue;
         }
       }
-
       return null;
-    } catch (error) {
-      console.error(`SealinkService: Error re-fetching trip data:`, error);
+    } catch (err) {
+      console.error("Sealink refetch error:", err);
       return null;
     }
   }
 
+  /**
+   * Extract seat layout from GoNautika trip data for a given class
+   */
   private static extractSeatLayoutFromTripData(
-    tripData: SealinkTripData,
+    tripData: GoNautikaTrip,
     classId: string
   ): SeatLayout {
-    let seats: any[];
-    let tier: string;
+    const isRoyal =
+      classId.toLowerCase().includes("business") ||
+      classId.toLowerCase().includes("royal") ||
+      classId.toLowerCase().includes("b") ||
+      classId.toLowerCase().includes("r");
 
-    if (classId.includes("premium") || classId.includes("P")) {
-      seats = Object.values(tripData.pClass || {});
-      tier = "P";
-    } else {
-      seats = Object.values(tripData.bClass || {});
-      tier = "B";
-    }
+    const tier: "B" | "P" = isRoyal ? "B" : "P";
 
-    return this.createSeatLayout(seats, tier);
+    // Find matching seat class
+    const matchedClass = tripData.seatClasses?.find((sc) => {
+      const name = sc.seatClassName.toLowerCase();
+      if (isRoyal) {
+        return name.includes("royal") || name.includes("business");
+      } else {
+        return name.includes("luxury") || name.includes("premium");
+      }
+    }) || tripData.seatClasses?.[0];
+
+    const seats = matchedClass?.seats || [];
+    return this.createSeatLayout(seats, tier, tripData);
   }
 
-  private static createSeatLayout(seats: any[], tier: string): SeatLayout {
+  /**
+   * Construct standard SeatLayout structure
+   */
+  private static createSeatLayout(
+    seats: GoNautikaSeat[],
+    tier: "B" | "P",
+    trip?: GoNautikaTrip
+  ): SeatLayout {
     return {
-      rows: 0, // No longer needed - visual layout determines arrangement
-      seatsPerRow: 0, // No longer needed - visual layout determines arrangement
-      seats: seats.map((seat) => ({
-        id: seat.number,
-        number: seat.number,
-        seat_numbering: seat.number,
-        status:
-          seat.isBooked === 1
-            ? "booked"
-            : seat.isBlocked === 1
-            ? "blocked"
-            : "available",
-        // No seat type assumptions - visual layout will determine this
-        tier: tier as "B" | "P",
-        // Remove hardcoded position - visual layout will handle positioning
+      rows: 0,
+      seatsPerRow: 0,
+      seats: (seats || []).map((seat) => ({
+        id: seat.seatNumber,
+        number: seat.seatNumber,
+        seat_numbering: seat.seatNumber,
+        status: seat.isAvailable
+          ? "available"
+          : seat.isBooked
+          ? "booked"
+          : "blocked",
+        tier: tier,
       })),
-      // Store original Sealink data for the simplified transformer
       operatorData: {
         sealink: {
-          // This will be populated by the calling method with full trip data
-          id: "", // Will be set by caller
-          tripId: 0, // Will be set by caller
-          from: "", // Will be set by caller
-          to: "", // Will be set by caller
-          dTime: { hour: 0, minute: 0 }, // Will be set by caller
-          aTime: { hour: 0, minute: 0 }, // Will be set by caller
-          vesselID: 0, // Will be set by caller
+          id: trip?.tripId || "",
+          tripId: (trip?.tripId as any) || 0,
+          from: trip?.origin || "",
+          to: trip?.destination || "",
+          dTime: { hour: 0, minute: 0 },
+          aTime: { hour: 0, minute: 0 },
+          vesselID: (trip?.vesselId as any) || 0,
           fares: {
             pBaseFare: 0,
             bBaseFare: 0,
@@ -993,19 +915,14 @@ export class SealinkService {
     };
   }
 
-  private static formatTime(time: { hour: number; minute: number }): string {
-    return `${time.hour.toString().padStart(2, "0")}:${time.minute
-      .toString()
-      .padStart(2, "0")}`;
-  }
+  private static calculateDuration(departureTime: string, arrivalTime: string): string {
+    if (!departureTime || !arrivalTime) return "1h 30m";
+    const [depH, depM] = departureTime.split(":").map(Number);
+    const [arrH, arrM] = arrivalTime.split(":").map(Number);
 
-  private static calculateDuration(
-    departure: { hour: number; minute: number },
-    arrival: { hour: number; minute: number }
-  ): string {
-    const depMinutes = departure.hour * 60 + departure.minute;
-    const arrMinutes = arrival.hour * 60 + arrival.minute;
-    const diffMinutes = arrMinutes - depMinutes;
+    let diffMinutes = arrH * 60 + (arrM || 0) - (depH * 60 + (depM || 0));
+    if (diffMinutes < 0) diffMinutes += 24 * 60;
+
     const hours = Math.floor(diffMinutes / 60);
     const minutes = diffMinutes % 60;
     return `${hours}h ${minutes}m`;
@@ -1021,17 +938,19 @@ export class SealinkService {
   }
 
   /**
-   * Get cached trip data by ID (for booking service)
+   * Get cached trip data by ID
    */
-  static getCachedTripData(tripId: string): SealinkTripData | undefined {
-    return this.tripDataCache.get(tripId);
+  static getCachedTripData(tripId: string): GoNautikaTrip | undefined {
+    const clean = tripId.replace("sealink-", "");
+    return this.tripDataCache.get(clean) || this.tripDataCache.get(tripId);
   }
 
   /**
    * Check if trip data is cached
    */
   static hasCachedTripData(tripId: string): boolean {
-    return this.tripDataCache.has(tripId);
+    const clean = tripId.replace("sealink-", "");
+    return this.tripDataCache.has(clean) || this.tripDataCache.has(tripId);
   }
 
   /**
@@ -1042,172 +961,18 @@ export class SealinkService {
   }
 
   /**
-   * Get ticket PDF from Sealink/Nautika API
-   * @param pnr The PNR (booking reference) from the booking response
-   * @returns Base64-encoded PDF or error
+   * In GoNautika Agency API v2, tickets are electronic PNRs confirmed directly
+   * via booking reference and PNR.
    */
   static async getTicketPDF(pnr: string): Promise<{
     success: boolean;
     pdfBase64?: string;
     error?: string;
   }> {
-    try {
-      console.log(`Sealink: Fetching PDF for PNR: ${pnr}`);
-
-      const { username, token } = this.validateCredentials();
-
-      const requestBody = {
-        pnr: pnr,
-        userName: username,
-        token: token,
-      };
-
-      console.log("Sealink PDF request:", {
-        endpoint: `${this.BASE_URL}getPnrPdf`,
-        pnr: pnr,
-      });
-
-      const response = await this.fetchWithRetry(
-        `${this.BASE_URL}getPnrPdf`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent": "AndamanExcursion/1.0",
-            Accept: "application/json, application/pdf, */*",
-          },
-          body: JSON.stringify(requestBody),
-        },
-        30000 // 30 second timeout for PDF generation
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Sealink PDF download failed: ${response.status}`, errorText.substring(0, 200));
-        return {
-          success: false,
-          error: `PDF download failed: ${response.status} - ${errorText.substring(0, 100)}`,
-        };
-      }
-
-      // Check content type to determine response format
-      const contentType = response.headers.get("content-type") || "";
-
-      if (contentType.includes("application/pdf")) {
-        // Direct PDF response - convert to base64
-        const arrayBuffer = await response.arrayBuffer();
-        const base64 = Buffer.from(arrayBuffer).toString("base64");
-        console.log(`Sealink PDF downloaded successfully (${base64.length} chars, direct PDF)`);
-        return {
-          success: true,
-          pdfBase64: base64,
-        };
-      } else if (contentType.includes("application/json")) {
-        // JSON response - may contain base64 PDF or error
-        const jsonResponse = await response.json();
-
-        if (jsonResponse.err) {
-          console.error("Sealink PDF API error:", jsonResponse.err);
-          return {
-            success: false,
-            error: `Sealink PDF API error: ${jsonResponse.err}`,
-          };
-        }
-
-        // Check for base64 PDF in response
-        if (jsonResponse.pdf || jsonResponse.pdfBase64 || jsonResponse.data) {
-          const pdfData = jsonResponse.pdf || jsonResponse.pdfBase64 || jsonResponse.data;
-          console.log(`Sealink PDF downloaded successfully (${pdfData.length} chars, JSON response)`);
-          return {
-            success: true,
-            pdfBase64: pdfData,
-          };
-        }
-
-        console.warn("Sealink PDF response has no PDF data:", Object.keys(jsonResponse));
-        return {
-          success: false,
-          error: "No PDF data in response",
-        };
-      } else {
-        // Unknown content type - try to read as text/base64 or JSON
-        const textResponse = await response.text();
-
-        // Check if it looks like base64 PDF (starts with PDF magic bytes in base64)
-        if (textResponse.startsWith("JVBERi")) {
-          console.log(`Sealink PDF downloaded successfully (${textResponse.length} chars, text response)`);
-          return {
-            success: true,
-            pdfBase64: textResponse,
-          };
-        }
-
-        // Check if it's JSON response with text/plain content type (common API quirk)
-        if (textResponse.startsWith("{") || textResponse.startsWith("[")) {
-          try {
-            const jsonResponse = JSON.parse(textResponse);
-
-            // Check for error in JSON
-            if (jsonResponse.err || jsonResponse.error) {
-              console.error("Sealink PDF API error (JSON in text/plain):", jsonResponse.err || jsonResponse.error);
-              return {
-                success: false,
-                error: `Sealink PDF API error: ${jsonResponse.err || jsonResponse.error}`,
-              };
-            }
-
-            // Check for PDF data in various formats
-            const pdfData = jsonResponse.pdf || jsonResponse.pdfBase64 || jsonResponse.data || jsonResponse.pdfData;
-            if (pdfData && typeof pdfData === "string" && pdfData.length > 100) {
-              console.log(`Sealink PDF downloaded successfully (${pdfData.length} chars, JSON in text/plain)`);
-              return {
-                success: true,
-                pdfBase64: pdfData,
-              };
-            }
-
-            // If the response is echoing back the request (pnr, userName, token), the API endpoint may not support PDF
-            if (jsonResponse.pnr && jsonResponse.userName && jsonResponse.token) {
-              console.warn("Sealink PDF API appears to be echoing request - endpoint may not be implemented");
-              console.warn("Response keys:", Object.keys(jsonResponse));
-              return {
-                success: false,
-                error: "Sealink PDF endpoint not available (request echoed back). Contact Sealink support.",
-              };
-            }
-
-            console.warn("Sealink PDF response has no PDF data:", Object.keys(jsonResponse));
-            return {
-              success: false,
-              error: "No PDF data in response",
-            };
-          } catch (parseError) {
-            // Not valid JSON, continue to other checks
-            console.warn("Failed to parse as JSON:", parseError);
-          }
-        }
-
-        // Check if it's raw base64 (long string without JSON structure)
-        if (textResponse.length > 1000 && !textResponse.includes("{")) {
-          console.log(`Sealink PDF downloaded successfully (${textResponse.length} chars, raw base64)`);
-          return {
-            success: true,
-            pdfBase64: textResponse,
-          };
-        }
-
-        console.warn("Sealink PDF unknown response format:", textResponse.substring(0, 200));
-        return {
-          success: false,
-          error: `Unknown response format: ${contentType}. Response preview: ${textResponse.substring(0, 100)}`,
-        };
-      }
-    } catch (error) {
-      console.error("Sealink PDF download error:", error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
+    console.log(`Sealink: E-ticket confirmation checked for PNR/Reference: ${pnr}`);
+    return {
+      success: false,
+      error: "GoNautika Agency API v2 issues electronic PNR tickets directly.",
+    };
   }
 }
