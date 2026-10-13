@@ -92,6 +92,7 @@ export interface SealinkBookingRequest {
   vesselID?: string | number;
   from: string;
   to: string;
+  date?: string;
   bookingTS?: number;
   paxDetail: {
     email: string;
@@ -498,11 +499,22 @@ export class SealinkService {
       let trip = this.tripDataCache.get(cleanTripId);
       if (!trip) {
         console.warn(`Trip data not in cache for ${cleanTripId}, attempting refetch...`);
-        const travelDate = bookingData.bookingTS
-          ? new Date(bookingData.bookingTS * 1000).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0];
+        const travelDate =
+          bookingData.date ||
+          (bookingData.bookingTS
+            ? new Date(bookingData.bookingTS * 1000).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0]);
 
-        const refetched = await this.refetchTripDataForSeatLayout(cleanTripId, travelDate);
+        const preferredRoute =
+          bookingData.from && bookingData.to
+            ? { from: bookingData.from, to: bookingData.to }
+            : undefined;
+
+        const refetched = await this.refetchTripDataForSeatLayout(
+          cleanTripId,
+          travelDate,
+          preferredRoute
+        );
         if (refetched) {
           trip = refetched;
         }
@@ -522,19 +534,30 @@ export class SealinkService {
         }
       }
 
+      const allSeats = (trip.seatClasses || []).flatMap((sc) => sc.seats || []);
       const ticketedPassengers = bookingData.paxDetail?.pax || [];
       const seatIdsToHold: string[] = [];
 
       for (const p of ticketedPassengers) {
-        const seatNum = (p.seat || "").toUpperCase().trim();
-        if (!seatNum) {
-          throw new Error(`Passenger ${p.name} has no seat selected.`);
-        }
-        const seatId = seatNumberToId.get(seatNum);
+        const rawSeat = (p.seat || "").toUpperCase().trim();
+        let seatId = rawSeat ? seatNumberToId.get(rawSeat) : undefined;
+
+        // Fallback: If seat not found or was auto-assigned/empty, pick first available seat
         if (!seatId) {
-          throw new Error(
-            `Seat number "${p.seat}" could not be found on trip ${trip.tripId}. Available seats may have changed.`
+          const availableSeat = allSeats.find(
+            (s) => s.isAvailable && !s.isBooked && !s.isBlocked && !seatIdsToHold.includes(s.seatId)
           );
+          if (availableSeat) {
+            seatId = availableSeat.seatId;
+            p.seat = availableSeat.seatNumber;
+            console.log(
+              `Sealink v2: Auto-assigned available seat ${availableSeat.seatNumber} for passenger ${p.name}`
+            );
+          } else {
+            throw new Error(
+              `Seat number "${p.seat}" could not be found or held on trip ${trip.tripId}. Available seats may have changed.`
+            );
+          }
         }
         seatIdsToHold.push(seatId);
       }
@@ -592,7 +615,7 @@ export class SealinkService {
         const fullName = (p.name || "").trim();
         const nameParts = fullName.split(/\s+/);
         const firstName = nameParts[0] || `Passenger${idx + 1}`;
-        const lastName = nameParts.slice(1).join(" ") || ".";
+        const lastName = nameParts.slice(1).join(" ") || nameParts[0] || "Guest";
 
         const genderNormalized =
           p.gender === "Female" || p.gender === "F" || p.gender === "female"
@@ -789,20 +812,23 @@ export class SealinkService {
    */
   private static async refetchTripDataForSeatLayout(
     tripId: string,
-    travelDate: string
+    travelDate: string,
+    preferredRoute?: { from: string; to: string }
   ): Promise<GoNautikaTrip | null> {
     try {
       const formattedDate = this.formatDateForSealink(travelDate);
-      const commonRoutes = [
-        { from: "Port Blair", to: "Swaraj Dweep" },
-        { from: "Port Blair", to: "Shaheed Dweep" },
-        { from: "Swaraj Dweep", to: "Port Blair" },
-        { from: "Shaheed Dweep", to: "Port Blair" },
-        { from: "Swaraj Dweep", to: "Shaheed Dweep" },
-        { from: "Shaheed Dweep", to: "Swaraj Dweep" },
-      ];
+      const routesToCheck = preferredRoute
+        ? [preferredRoute]
+        : [
+            { from: "Port Blair", to: "Swaraj Dweep" },
+            { from: "Port Blair", to: "Shaheed Dweep" },
+            { from: "Swaraj Dweep", to: "Port Blair" },
+            { from: "Shaheed Dweep", to: "Port Blair" },
+            { from: "Swaraj Dweep", to: "Shaheed Dweep" },
+            { from: "Shaheed Dweep", to: "Swaraj Dweep" },
+          ];
 
-      for (const route of commonRoutes) {
+      for (const route of routesToCheck) {
         try {
           const pathAndQuery = `/api/v2/trips?origin=${encodeURIComponent(
             route.from

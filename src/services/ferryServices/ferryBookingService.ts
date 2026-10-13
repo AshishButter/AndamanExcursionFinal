@@ -257,6 +257,7 @@ export class FerryBookingService {
         vesselID: vesselID, // Use the actual vessel ID from getTripData
         from: fromLocation,
         to: toLocation,
+        date: request.date,
         bookingTS: Math.floor(Date.now() / 1000),
         paxDetail: {
           email: request.passengerDetails[0]?.email || "",
