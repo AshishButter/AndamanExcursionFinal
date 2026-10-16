@@ -27,7 +27,24 @@ export function transformSeatLayoutToSeats(seatLayout: SeatLayout): Seat[] {
     seatLayout: seatLayout
   });
 
-  // If we have operator-specific data with actual data, use that for more accurate transformation
+  // If we have class-specific unified seats array, prefer it directly (avoids mixing multi-class data)
+  if (seatLayout.seats && seatLayout.seats.length > 0) {
+    console.log("📍 Using generic seats array - already formatted for selected class");
+    return seatLayout.seats.map((seat: any) => ({
+      id: seat.id,
+      number: seat.number,
+      displayNumber: seat.seat_numbering || seat.displayNumber || seat.number,
+      status: seat.status as SeatStatus,
+      type: seat.type,
+      position: seat.position,
+      price: seat.price,
+      tier: seat.tier as SeatTier,
+      isAccessible: seat.isAccessible,
+      isPremium: seat.isPremium,
+    }));
+  }
+
+  // Fallback to operator-specific data if generic seats array is not available
   if (seatLayout.operatorData?.sealink &&
     (Object.keys(seatLayout.operatorData.sealink.bClass || {}).length > 0 ||
       Object.keys(seatLayout.operatorData.sealink.pClass || {}).length > 0)) {
@@ -45,20 +62,7 @@ export function transformSeatLayoutToSeats(seatLayout: SeatLayout): Seat[] {
     return transformMakruzzToSeats(seatLayout.operatorData.makruzz);
   }
 
-  // Use the generic seats array (which is already properly formatted for Sealink)
-  console.log("📍 Using generic seats array - already formatted");
-  return seatLayout.seats.map((seat: any) => ({
-    id: seat.id,
-    number: seat.number,
-    displayNumber: seat.seat_numbering || seat.number,
-    status: seat.status as SeatStatus,
-    type: seat.type,
-    position: seat.position,
-    price: seat.price,
-    tier: seat.tier as SeatTier,
-    isAccessible: seat.isAccessible,
-    isPremium: seat.isPremium,
-  }));
+  return [];
 }
 
 /**

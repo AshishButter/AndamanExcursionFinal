@@ -11,19 +11,40 @@ export function FerryVesselLayout({
   vesselClass,
   ...props
 }: FerryVesselLayoutProps) {
-  const layoutKey = `${operator}-${vesselClass}`;
-  console.log(layoutKey);
+  // Normalize operator and class name (e.g. nautika -> sealink, Royal -> royal)
+  const normalizedOperator = (operator || "").toLowerCase();
+  const normalizedClass = (vesselClass || "").toLowerCase();
+  const isSealinkOrNautika =
+    normalizedOperator === "nautika" || normalizedOperator === "sealink";
+  const opKey = isSealinkOrNautika ? "sealink" : normalizedOperator;
+  const layoutKey = `${opKey}-${normalizedClass}`;
+  console.log("FerryVesselLayout layoutKey:", layoutKey);
 
   // Handle all Makruzz variants (makruzz, makruzz_gold, makruzz_pearl)
-  if (operator.startsWith("makruzz")) {
-    return <MakruzzSeatLayout vesselClass={vesselClass} operator={operator} {...props} />;
+  if (normalizedOperator.startsWith("makruzz")) {
+    return (
+      <MakruzzSeatLayout
+        vesselClass={vesselClass}
+        operator={normalizedOperator}
+        {...props}
+      />
+    );
+  }
+
+  // Robust handling for Nautika / Sealink layouts
+  if (isSealinkOrNautika) {
+    if (
+      normalizedClass.includes("royal") ||
+      normalizedClass.includes("business") ||
+      normalizedClass === "economy"
+    ) {
+      return <UpdatedSealinkRoyalLayout {...props} />;
+    }
+    // luxury, premium, deluxe, etc.
+    return <UpdatedSealinkLuxuryLayout {...props} />;
   }
 
   switch (layoutKey) {
-    case "sealink-premium":
-      return <UpdatedSealinkLuxuryLayout {...props} />;
-    case "sealink-economy":
-      return <UpdatedSealinkRoyalLayout {...props} />;
     case "greenocean-economy":
       return <GreenOceanEconomyLayout {...props} />;
     case "greenocean-premium":

@@ -18,35 +18,39 @@ export function UpdatedSealinkRoyalLayout(
   props: Omit<FerryVesselLayoutProps, "operator" | "vesselClass">
 ) {
   const getSeatsByGroup = (groupSeats: string[]) => {
-    return props.seats.filter((seat) =>
-      groupSeats.includes(seat.displayNumber.toUpperCase())
-    );
+    return props.seats.filter((seat) => {
+      const num = (seat.displayNumber || seat.number || "").toUpperCase();
+      return groupSeats.includes(num);
+    });
   };
 
   const renderSeatGroup = (groupSeats: string[], groupClass: string) => {
     const seats = getSeatsByGroup(groupSeats);
     return (
       <div className={`${styles.seatGroup} ${styles[groupClass]}`}>
-        {seats.map((seat) => (
-          <div
-            key={seat.id}
-            className={getSeatClassName(seat)}
-            onClick={() => {
-              if (seat.status !== "booked" && seat.status !== "blocked") {
-                props.onSeatSelect(seat.id);
-              }
-            }}
-          >
-            <Image
-              src={getSeatImage(seat)}
-              alt={`Seat ${seat.displayNumber}`}
-              className={styles.seatImage}
-              draggable={false}
-            />
-            {/* Optional: Show seat number overlay */}
-            <span className={styles.seatNumber}>{seat.displayNumber}</span>
-          </div>
-        ))}
+        {seats.map((seat) => {
+          const seatLabel = seat.displayNumber || seat.number || "";
+          return (
+            <div
+              key={seat.id}
+              className={getSeatClassName(seat)}
+              onClick={() => {
+                if (seat.status !== "booked" && seat.status !== "blocked") {
+                  props.onSeatSelect(seat.id);
+                }
+              }}
+            >
+              <Image
+                src={getSeatImage(seat)}
+                alt={`Seat ${seatLabel}`}
+                className={styles.seatImage}
+                draggable={false}
+              />
+              {/* Optional: Show seat number overlay */}
+              <span className={styles.seatNumber}>{seatLabel}</span>
+            </div>
+          );
+        })}
       </div>
     );
   };

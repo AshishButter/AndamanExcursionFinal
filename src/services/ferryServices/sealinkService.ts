@@ -783,6 +783,8 @@ export class SealinkService {
 
     const cleanTripId = ferryId.startsWith("sealink-")
       ? ferryId.replace("sealink-", "")
+      : ferryId.startsWith("nautika-")
+      ? ferryId.replace("nautika-", "")
       : ferryId;
 
     let tripData = this.tripDataCache.get(cleanTripId);
@@ -872,24 +874,49 @@ export class SealinkService {
     tripData: GoNautikaTrip,
     classId: string
   ): SeatLayout {
-    const isRoyal =
-      classId.toLowerCase().includes("business") ||
-      classId.toLowerCase().includes("royal") ||
-      classId.toLowerCase().includes("b") ||
-      classId.toLowerCase().includes("r");
+    const cleanId = (classId || "").toLowerCase();
 
-    const tier: "B" | "P" = isRoyal ? "B" : "P";
+    // 1. Direct match on seatClassId
+    let matchedClass = tripData.seatClasses?.find(
+      (sc) => sc.seatClassId?.toLowerCase() === cleanId
+    );
 
-    // Find matching seat class
-    const matchedClass = tripData.seatClasses?.find((sc) => {
-      const name = sc.seatClassName.toLowerCase();
-      if (isRoyal) {
-        return name.includes("royal") || name.includes("business");
-      } else {
-        return name.includes("luxury") || name.includes("premium");
-      }
-    }) || tripData.seatClasses?.[0];
+    // 2. Slug or name match
+    if (!matchedClass) {
+      const isRoyal =
+        cleanId.endsWith("-business") ||
+        cleanId.endsWith("-royal") ||
+        cleanId.includes("business") ||
+        cleanId.includes("royal");
 
+      const isLuxury =
+        cleanId.endsWith("-premium") ||
+        cleanId.endsWith("-luxury") ||
+        cleanId.includes("luxury") ||
+        cleanId.includes("premium");
+
+      matchedClass = tripData.seatClasses?.find((sc) => {
+        const name = sc.seatClassName.toLowerCase();
+        if (isRoyal && !isLuxury) {
+          return name.includes("royal") || name.includes("business");
+        }
+        if (isLuxury && !isRoyal) {
+          return name.includes("luxury") || name.includes("premium");
+        }
+        return false;
+      });
+    }
+
+    // Fallback to first class if none matched
+    if (!matchedClass) {
+      matchedClass = tripData.seatClasses?.[0];
+    }
+
+    const isRoyalClass =
+      matchedClass?.seatClassName.toLowerCase().includes("royal") ||
+      matchedClass?.seatClassName.toLowerCase().includes("business");
+
+    const tier: "B" | "P" = isRoyalClass ? "B" : "P";
     const seats = matchedClass?.seats || [];
     return this.createSeatLayout(seats, tier, tripData);
   }
@@ -902,6 +929,36 @@ export class SealinkService {
     tier: "B" | "P",
     trip?: GoNautikaTrip
   ): SeatLayout {
+    // Populate bClass and pClass maps so components expecting legacy structures have full seat data
+    const bClassMap: Record<string, any> = {};
+    const pClassMap: Record<string, any> = {};
+
+    let pBaseFare = 0;
+    let bBaseFare = 0;
+
+    for (const sc of trip?.seatClasses || []) {
+      const isRoyal =
+        sc.seatClassName.toLowerCase().includes("royal") ||
+        sc.seatClassName.toLowerCase().includes("business");
+      const targetMap = isRoyal ? bClassMap : pClassMap;
+      const t: "B" | "P" = isRoyal ? "B" : "P";
+
+      if (isRoyal) {
+        bBaseFare = sc.baseFare || 0;
+      } else {
+        pBaseFare = sc.baseFare || 0;
+      }
+
+      for (const s of sc.seats || []) {
+        targetMap[s.seatNumber] = {
+          tier: t,
+          number: s.seatNumber,
+          isBooked: s.isBooked ? 1 : 0,
+          isBlocked: s.isBlocked ? 1 : 0,
+        };
+      }
+    }
+
     return {
       rows: 0,
       seatsPerRow: 0,
@@ -926,16 +983,16 @@ export class SealinkService {
           aTime: { hour: 0, minute: 0 },
           vesselID: (trip?.vesselId as any) || 0,
           fares: {
-            pBaseFare: 0,
-            bBaseFare: 0,
+            pBaseFare: pBaseFare,
+            bBaseFare: bBaseFare,
             pBaseFarePBHLNL: 0,
             bBaseFarePBHLNL: 0,
             pIslanderFarePBHLNL: 0,
             bIslanderFarePBHLNL: 0,
             infantFare: 0,
           },
-          bClass: {},
-          pClass: {},
+          bClass: bClassMap,
+          pClass: pClassMap,
         },
       },
     };

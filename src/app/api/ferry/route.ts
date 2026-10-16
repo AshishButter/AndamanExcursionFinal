@@ -266,6 +266,7 @@ async function handleSeatLayout(request: NextRequest): Promise<NextResponse> {
         };
         break;
 
+      case "nautika":
       case "sealink":
         seatLayout = await SealinkService.getSeatLayout(
           ferryId,
