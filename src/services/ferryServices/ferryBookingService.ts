@@ -258,6 +258,7 @@ export class FerryBookingService {
         from: fromLocation,
         to: toLocation,
         date: request.date,
+        classId: request.classId,
         bookingTS: Math.floor(Date.now() / 1000),
         paxDetail: {
           email: request.passengerDetails[0]?.email || "",

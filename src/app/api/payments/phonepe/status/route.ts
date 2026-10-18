@@ -336,14 +336,22 @@ async function processBooking(
       toLocation: ferryItem.ferry.route.to.name,
       date: ferryItem.date,
       time: ferryItem.time,
-      classId: ferryItem.selectedClass?.id || ferryItem.ferry.selectedClass?.id,
+      classId:
+        ferryItem.selectedClass?.classId ||
+        ferryItem.selectedClass?.id ||
+        ferryItem.ferry?.selectedClass?.classId ||
+        ferryItem.ferry?.selectedClass?.id,
       routeId: ferryItem.ferry.operatorFerryId?.toString(),
       passengers: {
         adults,
         children,
         infants,
       },
-      selectedSeats: ferryItem.selectedSeats || [],
+      selectedSeats: (ferryItem.selectedSeats || [])
+        .map((s: any) =>
+          typeof s === "string" ? s : s?.seatNumber || s?.number || s?.id || ""
+        )
+        .filter(Boolean),
       passengerDetails: bookingData.members.map((member: any) => ({
         fullName: member.fullName,
         age: member.age,

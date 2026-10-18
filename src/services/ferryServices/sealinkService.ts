@@ -93,6 +93,7 @@ export interface SealinkBookingRequest {
   from: string;
   to: string;
   date?: string;
+  classId?: string;
   bookingTS?: number;
   paxDetail: {
     email: string;
@@ -493,23 +494,23 @@ export class SealinkService {
       });
 
       const rawTripId = String(bookingData.tripId || bookingData.id || "");
-      const cleanTripId = rawTripId.replace("sealink-", "");
+      const cleanTripId = rawTripId.replace("sealink-", "").replace("nautika-", "");
+
+      const travelDate =
+        bookingData.date ||
+        (bookingData.bookingTS
+          ? new Date(bookingData.bookingTS * 1000).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0]);
+
+      const preferredRoute =
+        bookingData.from && bookingData.to
+          ? { from: bookingData.from, to: bookingData.to }
+          : undefined;
 
       // 1. Resolve trip data from cache or refetch
       let trip = this.tripDataCache.get(cleanTripId);
       if (!trip) {
         console.warn(`Trip data not in cache for ${cleanTripId}, attempting refetch...`);
-        const travelDate =
-          bookingData.date ||
-          (bookingData.bookingTS
-            ? new Date(bookingData.bookingTS * 1000).toISOString().split("T")[0]
-            : new Date().toISOString().split("T")[0]);
-
-        const preferredRoute =
-          bookingData.from && bookingData.to
-            ? { from: bookingData.from, to: bookingData.to }
-            : undefined;
-
         const refetched = await this.refetchTripDataForSeatLayout(
           cleanTripId,
           travelDate,
@@ -526,39 +527,107 @@ export class SealinkService {
         );
       }
 
-      // 2. Map requested seat numbers to seatIds (UUIDs)
-      const seatNumberToId = new Map<string, string>();
-      for (const sc of trip.seatClasses || []) {
-        for (const s of sc.seats || []) {
-          seatNumberToId.set(s.seatNumber.toUpperCase().trim(), s.seatId);
-        }
-      }
+      // Helper to find matching seatClass for a classId or tier
+      const findTargetSeatClass = (classId?: string, tier?: string): GoNautikaSeatClass | undefined => {
+        const cleanId = (classId || "").toLowerCase();
+        if (cleanId) {
+          const direct = trip?.seatClasses?.find(
+            (sc) => sc.seatClassId?.toLowerCase() === cleanId
+          );
+          if (direct) return direct;
 
+          const isRoyal =
+            cleanId.endsWith("-business") ||
+            cleanId.endsWith("-royal") ||
+            cleanId.includes("business") ||
+            cleanId.includes("royal");
+
+          const isLuxury =
+            cleanId.endsWith("-premium") ||
+            cleanId.endsWith("-luxury") ||
+            cleanId.includes("luxury") ||
+            cleanId.includes("premium");
+
+          const matched = trip?.seatClasses?.find((sc) => {
+            const name = sc.seatClassName.toLowerCase();
+            if (isRoyal && !isLuxury) return name.includes("royal") || name.includes("business");
+            if (isLuxury && !isRoyal) return name.includes("luxury") || name.includes("premium");
+            return false;
+          });
+          if (matched) return matched;
+        }
+
+        if (tier) {
+          const isRoyal = tier.toUpperCase() === "B";
+          const matched = trip?.seatClasses?.find((sc) => {
+            const name = sc.seatClassName.toLowerCase();
+            return isRoyal
+              ? name.includes("royal") || name.includes("business")
+              : name.includes("luxury") || name.includes("premium");
+          });
+          if (matched) return matched;
+        }
+
+        return trip?.seatClasses?.[0];
+      };
+
+      // 2. Map requested seat numbers to seatIds (UUIDs) matching passenger class
       const allSeats = (trip.seatClasses || []).flatMap((sc) => sc.seats || []);
       const ticketedPassengers = bookingData.paxDetail?.pax || [];
       const seatIdsToHold: string[] = [];
 
       for (const p of ticketedPassengers) {
         const rawSeat = (p.seat || "").toUpperCase().trim();
-        let seatId = rawSeat ? seatNumberToId.get(rawSeat) : undefined;
+        const targetClass = findTargetSeatClass(bookingData.classId, p.tier);
 
-        // Fallback: If seat not found or was auto-assigned/empty, pick first available seat
-        if (!seatId) {
-          const availableSeat = allSeats.find(
-            (s) => s.isAvailable && !s.isBooked && !s.isBlocked && !seatIdsToHold.includes(s.seatId)
+        let seatId: string | undefined;
+
+        // Step A: Look for seat number inside targetClass FIRST (avoids deck collision like 10F in Royal vs Luxury)
+        if (rawSeat && targetClass?.seats) {
+          const seatInClass = targetClass.seats.find(
+            (s) => s.seatNumber.toUpperCase().trim() === rawSeat
           );
-          if (availableSeat) {
-            seatId = availableSeat.seatId;
-            p.seat = availableSeat.seatNumber;
-            console.log(
-              `Sealink v2: Auto-assigned available seat ${availableSeat.seatNumber} for passenger ${p.name}`
-            );
-          } else {
-            throw new Error(
-              `Seat number "${p.seat}" could not be found or held on trip ${trip.tripId}. Available seats may have changed.`
-            );
+          if (seatInClass) {
+            seatId = seatInClass.seatId;
           }
         }
+
+        // Step B: If not found in targetClass, check across other classes
+        if (!seatId && rawSeat) {
+          const seatAcrossClasses = allSeats.find(
+            (s) => s.seatNumber.toUpperCase().trim() === rawSeat
+          );
+          if (seatAcrossClasses) {
+            seatId = seatAcrossClasses.seatId;
+          }
+        }
+
+        // Step C: Fallback: Auto-assign an available seat in the target class
+        if (!seatId) {
+          const availableInClass = targetClass?.seats?.find(
+            (s) => s.isAvailable && !s.isBooked && !s.isBlocked && !seatIdsToHold.includes(s.seatId)
+          );
+          if (availableInClass) {
+            seatId = availableInClass.seatId;
+            p.seat = availableInClass.seatNumber;
+            console.log(
+              `Sealink v2: Auto-assigned available seat ${availableInClass.seatNumber} in class ${targetClass?.seatClassName} for passenger ${p.name}`
+            );
+          } else {
+            const anyAvailable = allSeats.find(
+              (s) => s.isAvailable && !s.isBooked && !s.isBlocked && !seatIdsToHold.includes(s.seatId)
+            );
+            if (anyAvailable) {
+              seatId = anyAvailable.seatId;
+              p.seat = anyAvailable.seatNumber;
+            } else {
+              throw new Error(
+                `No available seats remaining on trip ${trip.tripId}. Cannot hold seats.`
+              );
+            }
+          }
+        }
+
         seatIdsToHold.push(seatId);
       }
 
@@ -568,7 +637,7 @@ export class SealinkService {
         seatIds: seatIdsToHold,
       });
 
-      const holdRes = await this.sendV2Request<GoNautikaHoldResponse>(
+      let holdRes = await this.sendV2Request<GoNautikaHoldResponse>(
         "POST",
         "/api/v2/seat-holds",
         {
@@ -576,6 +645,58 @@ export class SealinkService {
           seatIds: seatIdsToHold,
         }
       );
+
+      // If hold failed because the requested seat became unavailable, automatically fall back to available seats in the same class
+      if (
+        (holdRes.status === 409 || holdRes.status === 400) &&
+        JSON.stringify(holdRes.body).toLowerCase().includes("no longer available")
+      ) {
+        console.warn(
+          "Sealink v2: Selected seat no longer available, fetching fresh trip data for alternative seats..."
+        );
+        const freshTrip = await this.refetchTripDataForSeatLayout(
+          cleanTripId,
+          travelDate,
+          preferredRoute
+        );
+        if (freshTrip) {
+          trip = freshTrip;
+          const retrySeatIds: string[] = [];
+          for (let i = 0; i < ticketedPassengers.length; i++) {
+            const p = ticketedPassengers[i];
+            const targetClass = findTargetSeatClass(bookingData.classId, p.tier);
+            const altSeat = targetClass?.seats?.find(
+              (s) =>
+                s.isAvailable &&
+                !s.isBooked &&
+                !s.isBlocked &&
+                !retrySeatIds.includes(s.seatId)
+            );
+            if (altSeat) {
+              retrySeatIds.push(altSeat.seatId);
+              p.seat = altSeat.seatNumber;
+              console.log(
+                `Sealink v2: Re-assigned alternative seat ${altSeat.seatNumber} in class ${targetClass?.seatClassName} for ${p.name}`
+              );
+            }
+          }
+
+          if (retrySeatIds.length === ticketedPassengers.length) {
+            console.log(
+              "Sealink v2: Retrying seat hold with alternative available seats...",
+              retrySeatIds
+            );
+            holdRes = await this.sendV2Request<GoNautikaHoldResponse>(
+              "POST",
+              "/api/v2/seat-holds",
+              {
+                tripId: trip.tripId,
+                seatIds: retrySeatIds,
+              }
+            );
+          }
+        }
+      }
 
       if (holdRes.status !== 201 || !holdRes.body?.seats) {
         const errorDetail =
@@ -603,9 +724,9 @@ export class SealinkService {
 
       const bookingPassengers = ticketedPassengers.map((p, idx) => {
         const seatNum = (p.seat || "").toUpperCase().trim();
-        const seatId = seatNumberToId.get(seatNum);
+        const assignedSeatId = seatIdsToHold[idx];
         const reservationId =
-          (seatId ? seatIdToResId.get(seatId) : undefined) ||
+          (assignedSeatId ? seatIdToResId.get(assignedSeatId) : undefined) ||
           seatNumToResId.get(seatNum);
 
         if (!reservationId) {
