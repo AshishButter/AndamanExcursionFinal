@@ -544,6 +544,20 @@ const BookingTicketPDFNew: React.FC<BookingTicketPDFProps> = ({ data, qrCodeUrl 
   const ferryOperator = mainFerry?.operator || mainFerry?.ferryName || "Ferry Service";
   const ferryLogo = getFerryLogo(ferryOperator);
 
+  const isSealinkFerry =
+    ferryOperator.toLowerCase().includes("sealink") ||
+    ferryOperator.toLowerCase().includes("sea link") ||
+    mainFerry?.operator?.toLowerCase().includes("sealink") ||
+    mainFerry?.operator?.toLowerCase().includes("sea link");
+
+  const ferryVessel = isSealinkFerry
+    ? mainFerry?.ferryName &&
+      !mainFerry.ferryName.toLowerCase().includes("sealink") &&
+      !mainFerry.ferryName.toLowerCase().includes("unknown")
+      ? mainFerry.ferryName
+      : "Nautika"
+    : ferryOperator;
+
   // Get PNR from ferry provider or use confirmation number for boats
   const providerPNR = mainFerry?.providerBooking?.pnr || confirmationNumber;
 
@@ -806,7 +820,7 @@ const BookingTicketPDFNew: React.FC<BookingTicketPDFProps> = ({ data, qrCodeUrl 
                     {mainFerry.schedule?.arrivalTime || "N/A"}
                   </Text>
                   <Text style={[styles.itineraryCell, styles.columnVessel]}>
-                    {ferryOperator}
+                    {ferryVessel}
                   </Text>
                   <Text style={[styles.itineraryCell, styles.columnClass]}>
                     {mainFerry.selectedClass?.className || "N/A"}

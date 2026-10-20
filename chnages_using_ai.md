@@ -27,4 +27,7 @@
   - **Class-Scoped Seat Resolution**: Updated `bookSeats` to resolve seats within the passenger's target `seatClass` first (matched via `bookingData.classId` and passenger `tier`).
   - **Forwarded `classId`**: Enhanced `src/app/api/payments/phonepe/status/route.ts` and `ferryBookingService.ts: bookSealinkFerry` to explicitly forward `classId` from the booking item down to `SealinkBookingRequest`.
   - **Automatic Seat Hold Fallback**: Added auto-fallback in `bookSeats` so that if a seat is genuinely snatched by another customer between selection and payment, it refetches fresh trip data and holds an alternative available seat in the same class, preventing failed "Pending" bookings.
-
+- **Updated Vessel Name in Ticket PDF for Sealink / Nautika**:
+  - In `src/components/pdf/BookingTicketPDFNew.tsx`, the Itinerary table row previously rendered `{ferryOperator}` directly under the "Vessel" column.
+  - When booking a Sealink / Nautika ferry, `ferryOperator` resolves to `"sealink"`, causing the PDF ticket to literally display "sealink" in the Vessel section.
+  - Added `ferryVessel` logic that checks if the ferry operator is Sealink / Sea Link. When true, it resolves to the actual vessel name (e.g. `mainFerry.ferryName` such as "Nautika" or "Nautika Lite") or defaults to `"Nautika"`, leaving operator logos, terms, and all other ferry providers (Makruzz, Green Ocean, boats) unchanged.
